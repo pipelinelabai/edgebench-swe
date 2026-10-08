@@ -1,0 +1,38 @@
+{
+  "name": "@turf/along",
+  "version": "3.10.5",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/Turfjs/turf.git"
+  },
+  "keywords": [
+    "along",
+    "line",
+    "linestring",
+    "turf",
+    "distance"
+  ],
+  "author": "Turf Authors",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Turfjs/turf/issues"
+  },
+  "homepage": "https://github.com/Turfjs/turf",
+  "devDependencies": {
+    "benchmark": "^1.0.0",
+    "tape": "^3.5.0",
+    "@turf/helpers": "^3.10.5"
+  },
+  "dependencies": {
+    "@turf/bearing": "^3.10.0",
+    "@turf/destination": "^3.10.5",
+    "@turf/distance": "^3.10.5",
+    "@turf/helpers": "^3.10.5"
+  },
+  "types": "index.d.ts"
+}

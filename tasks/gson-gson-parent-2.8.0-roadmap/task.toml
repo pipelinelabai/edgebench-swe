@@ -1,0 +1,19 @@
+version = "1"
+
+[metadata]
+name        = "gson-gson-parent-2.8.0-roadmap"
+description = "Modernise a Java JSON serialization library: align streaming with RFC 7159, add lenient config, atomic/currency/concurrent-map adapters, overhaul the @JsonAdapter annotation, add TypeToken/instance-introspection APIs, and tighten the type-hierarchy runtime type check."
+category    = "software_engineering"
+difficulty  = "hard"
+
+[verifier]
+timeout_sec = 1800
+
+[agent]
+timeout_sec = 7200
+
+[environment]
+build_timeout_sec = 1200
+cpus       = 2
+memory_mb  = 4096
+storage_mb = 10240

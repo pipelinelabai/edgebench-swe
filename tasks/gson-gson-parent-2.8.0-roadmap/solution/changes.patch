@@ -1,0 +1,3050 @@
+diff --git a/gson/src/main/java/com/google/gson/DefaultDateTypeAdapter.java b/gson/src/main/java/com/google/gson/DefaultDateTypeAdapter.java
+index aa253340..35b80305 100644
+--- a/gson/src/main/java/com/google/gson/DefaultDateTypeAdapter.java
++++ b/gson/src/main/java/com/google/gson/DefaultDateTypeAdapter.java
+@@ -20,10 +20,12 @@ import java.lang.reflect.Type;
+ import java.sql.Timestamp;
+ import java.text.DateFormat;
+ import java.text.ParseException;
++import java.text.ParsePosition;
+ import java.text.SimpleDateFormat;
+ import java.util.Date;
+ import java.util.Locale;
+-import java.util.TimeZone;
++
++import com.google.gson.internal.bind.util.ISO8601Utils;
+ 
+ /**
+  * This type adapter supports three subclasses of date: Date, Timestamp, and
+@@ -38,7 +40,6 @@ final class DefaultDateTypeAdapter implements JsonSerializer<Date>, JsonDeserial
+ 
+   private final DateFormat enUsFormat;
+   private final DateFormat localFormat;
+-  private final DateFormat iso8601Format;
+ 
+   DefaultDateTypeAdapter() {
+     this(DateFormat.getDateTimeInstance(DateFormat.DEFAULT, DateFormat.DEFAULT, Locale.US),
+@@ -61,12 +62,11 @@ final class DefaultDateTypeAdapter implements JsonSerializer<Date>, JsonDeserial
+   DefaultDateTypeAdapter(DateFormat enUsFormat, DateFormat localFormat) {
+     this.enUsFormat = enUsFormat;
+     this.localFormat = localFormat;
+-    this.iso8601Format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
+-    this.iso8601Format.setTimeZone(TimeZone.getTimeZone("UTC"));
+   }
+ 
+   // These methods need to be synchronized since JDK DateFormat classes are not thread-safe
+   // See issue 162
++  @Override
+   public JsonElement serialize(Date src, Type typeOfSrc, JsonSerializationContext context) {
+     synchronized (localFormat) {
+       String dateFormatAsString = enUsFormat.format(src);
+@@ -74,6 +74,7 @@ final class DefaultDateTypeAdapter implements JsonSerializer<Date>, JsonDeserial
+     }
+   }
+ 
++  @Override
+   public Date deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context)
+       throws JsonParseException {
+     if (!(json instanceof JsonPrimitive)) {
+@@ -94,15 +95,13 @@ final class DefaultDateTypeAdapter implements JsonSerializer<Date>, JsonDeserial
+   private Date deserializeToDate(JsonElement json) {
+     synchronized (localFormat) {
+       try {
+-        return localFormat.parse(json.getAsString());
+-      } catch (ParseException ignored) {
+-      }
++      	return localFormat.parse(json.getAsString());
++      } catch (ParseException ignored) {}
+       try {
+         return enUsFormat.parse(json.getAsString());
+-      } catch (ParseException ignored) {
+-      }
++      } catch (ParseException ignored) {}
+       try {
+-        return iso8601Format.parse(json.getAsString());
++        return ISO8601Utils.parse(json.getAsString(), new ParsePosition(0));
+       } catch (ParseException e) {
+         throw new JsonSyntaxException(json.getAsString(), e);
+       }
+diff --git a/gson/src/main/java/com/google/gson/FieldAttributes.java b/gson/src/main/java/com/google/gson/FieldAttributes.java
+index cb89ff11..bcabff14 100644
+--- a/gson/src/main/java/com/google/gson/FieldAttributes.java
++++ b/gson/src/main/java/com/google/gson/FieldAttributes.java
+@@ -68,7 +68,7 @@ public final class FieldAttributes {
+    *   private List&lt;String&gt; red;
+    * }
+    *
+-   * Type listParmeterizedType = new TypeToken&lt;List&lt;String&gt;&gt;() {}.getType();
++   * Type listParameterizedType = new TypeToken&lt;List&lt;String&gt;&gt;() {}.getType();
+    * </pre>
+    *
+    * <p>This method would return {@code String.class} for the {@code bar} field and
+diff --git a/gson/src/main/java/com/google/gson/FieldNamingPolicy.java b/gson/src/main/java/com/google/gson/FieldNamingPolicy.java
+index 6b4c72ca..3b325a4f 100644
+--- a/gson/src/main/java/com/google/gson/FieldNamingPolicy.java
++++ b/gson/src/main/java/com/google/gson/FieldNamingPolicy.java
+@@ -35,7 +35,7 @@ public enum FieldNamingPolicy implements FieldNamingStrategy {
+    * unchanged.
+    */
+   IDENTITY() {
+-    public String translateName(Field f) {
++    @Override public String translateName(Field f) {
+       return f.getName();
+     }
+   },
+@@ -51,7 +51,7 @@ public enum FieldNamingPolicy implements FieldNamingStrategy {
+    * </ul>
+    */
+   UPPER_CAMEL_CASE() {
+-    public String translateName(Field f) {
++    @Override public String translateName(Field f) {
+       return upperCaseFirstLetter(f.getName());
+     }
+   },
+@@ -70,7 +70,7 @@ public enum FieldNamingPolicy implements FieldNamingStrategy {
+    * @since 1.4
+    */
+   UPPER_CAMEL_CASE_WITH_SPACES() {
+-    public String translateName(Field f) {
++    @Override public String translateName(Field f) {
+       return upperCaseFirstLetter(separateCamelCase(f.getName(), " "));
+     }
+   },
+@@ -88,7 +88,7 @@ public enum FieldNamingPolicy implements FieldNamingStrategy {
+    * </ul>
+    */
+   LOWER_CASE_WITH_UNDERSCORES() {
+-    public String translateName(Field f) {
++    @Override public String translateName(Field f) {
+       return separateCamelCase(f.getName(), "_").toLowerCase(Locale.ENGLISH);
+     }
+   },
+@@ -111,7 +111,7 @@ public enum FieldNamingPolicy implements FieldNamingStrategy {
+    * @since 1.4
+    */
+   LOWER_CASE_WITH_DASHES() {
+-    public String translateName(Field f) {
++    @Override public String translateName(Field f) {
+       return separateCamelCase(f.getName(), "-").toLowerCase(Locale.ENGLISH);
+     }
+   };
+@@ -120,7 +120,7 @@ public enum FieldNamingPolicy implements FieldNamingStrategy {
+    * Converts the field name that uses camel-case define word separation into
+    * separate words that are separated by the provided {@code separatorString}.
+    */
+-  private static String separateCamelCase(String name, String separator) {
++  static String separateCamelCase(String name, String separator) {
+     StringBuilder translation = new StringBuilder();
+     for (int i = 0; i < name.length(); i++) {
+       char character = name.charAt(i);
+@@ -135,7 +135,7 @@ public enum FieldNamingPolicy implements FieldNamingStrategy {
+   /**
+    * Ensures the JSON field names begins with an upper case letter.
+    */
+-  private static String upperCaseFirstLetter(String name) {
++  static String upperCaseFirstLetter(String name) {
+     StringBuilder fieldNameBuilder = new StringBuilder();
+     int index = 0;
+     char firstCharacter = name.charAt(index);
+@@ -166,4 +166,4 @@ public enum FieldNamingPolicy implements FieldNamingStrategy {
+         ? firstCharacter + srcString.substring(indexOfSubstring)
+         : String.valueOf(firstCharacter);
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/gson/src/main/java/com/google/gson/Gson.java b/gson/src/main/java/com/google/gson/Gson.java
+index d3b172a8..e97b1627 100644
+--- a/gson/src/main/java/com/google/gson/Gson.java
++++ b/gson/src/main/java/com/google/gson/Gson.java
+@@ -30,6 +30,9 @@ import java.util.Collections;
+ import java.util.HashMap;
+ import java.util.List;
+ import java.util.Map;
++import java.util.concurrent.ConcurrentHashMap;
++import java.util.concurrent.atomic.AtomicLong;
++import java.util.concurrent.atomic.AtomicLongArray;
+ 
+ import com.google.gson.internal.ConstructorConstructor;
+ import com.google.gson.internal.Excluder;
+@@ -76,7 +79,7 @@ import com.google.gson.stream.MalformedJsonException;
+  * <p>If the object that your are serializing/deserializing is a {@code ParameterizedType}
+  * (i.e. contains at least one type parameter and may be an array) then you must use the
+  * {@link #toJson(Object, Type)} or {@link #fromJson(String, Type)} method.  Here is an
+- * example for serializing and deserialing a {@code ParameterizedType}:
++ * example for serializing and deserializing a {@code ParameterizedType}:
+  *
+  * <pre>
+  * Type listType = new TypeToken&lt;List&lt;String&gt;&gt;() {}.getType();
+@@ -99,7 +102,14 @@ import com.google.gson.stream.MalformedJsonException;
+  */
+ public final class Gson {
+   static final boolean DEFAULT_JSON_NON_EXECUTABLE = false;
+-
++  static final boolean DEFAULT_LENIENT = false;
++  static final boolean DEFAULT_PRETTY_PRINT = false;
++  static final boolean DEFAULT_ESCAPE_HTML = true;
++  static final boolean DEFAULT_SERIALIZE_NULLS = false;
++  static final boolean DEFAULT_COMPLEX_MAP_KEYS = false;
++  static final boolean DEFAULT_SPECIALIZE_FLOAT_VALUES = false;
++
++  private static final TypeToken<?> NULL_KEY_SURROGATE = new TypeToken<Object>() {};
+   private static final String JSON_NON_EXECUTABLE_PREFIX = ")]}'\n";
+ 
+   /**
+@@ -112,32 +122,19 @@ public final class Gson {
+   private final ThreadLocal<Map<TypeToken<?>, FutureTypeAdapter<?>>> calls
+       = new ThreadLocal<Map<TypeToken<?>, FutureTypeAdapter<?>>>();
+ 
+-  private final Map<TypeToken<?>, TypeAdapter<?>> typeTokenCache
+-      = Collections.synchronizedMap(new HashMap<TypeToken<?>, TypeAdapter<?>>());
++  private final Map<TypeToken<?>, TypeAdapter<?>> typeTokenCache = new ConcurrentHashMap<TypeToken<?>, TypeAdapter<?>>();
+ 
+   private final List<TypeAdapterFactory> factories;
+   private final ConstructorConstructor constructorConstructor;
+ 
++  private final Excluder excluder;
++  private final FieldNamingStrategy fieldNamingStrategy;
+   private final boolean serializeNulls;
+   private final boolean htmlSafe;
+   private final boolean generateNonExecutableJson;
+   private final boolean prettyPrinting;
+-
+-  final JsonDeserializationContext deserializationContext = new JsonDeserializationContext() {
+-    @SuppressWarnings("unchecked")
+-	public <T> T deserialize(JsonElement json, Type typeOfT) throws JsonParseException {
+-      return (T) fromJson(json, typeOfT);
+-    }
+-  };
+-
+-  final JsonSerializationContext serializationContext = new JsonSerializationContext() {
+-    public JsonElement serialize(Object src) {
+-      return toJsonTree(src);
+-    }
+-    public JsonElement serialize(Object src, Type typeOfSrc) {
+-      return toJsonTree(src, typeOfSrc);
+-    }
+-  };
++  private final boolean lenient;
++  private final JsonAdapterAnnotationTypeAdapterFactory jsonAdapterFactory;
+ 
+   /**
+    * Constructs a Gson object with default configuration. The default configuration has the
+@@ -175,22 +172,26 @@ public final class Gson {
+    */
+   public Gson() {
+     this(Excluder.DEFAULT, FieldNamingPolicy.IDENTITY,
+-        Collections.<Type, InstanceCreator<?>>emptyMap(), false, false, DEFAULT_JSON_NON_EXECUTABLE,
+-        true, false, false, LongSerializationPolicy.DEFAULT,
+-        Collections.<TypeAdapterFactory>emptyList());
++        Collections.<Type, InstanceCreator<?>>emptyMap(), DEFAULT_SERIALIZE_NULLS,
++        DEFAULT_COMPLEX_MAP_KEYS, DEFAULT_JSON_NON_EXECUTABLE, DEFAULT_ESCAPE_HTML,
++        DEFAULT_PRETTY_PRINT, DEFAULT_LENIENT, DEFAULT_SPECIALIZE_FLOAT_VALUES,
++        LongSerializationPolicy.DEFAULT, Collections.<TypeAdapterFactory>emptyList());
+   }
+ 
+-  Gson(final Excluder excluder, final FieldNamingStrategy fieldNamingPolicy,
++  Gson(final Excluder excluder, final FieldNamingStrategy fieldNamingStrategy,
+       final Map<Type, InstanceCreator<?>> instanceCreators, boolean serializeNulls,
+       boolean complexMapKeySerialization, boolean generateNonExecutableGson, boolean htmlSafe,
+-      boolean prettyPrinting, boolean serializeSpecialFloatingPointValues,
++      boolean prettyPrinting, boolean lenient, boolean serializeSpecialFloatingPointValues,
+       LongSerializationPolicy longSerializationPolicy,
+       List<TypeAdapterFactory> typeAdapterFactories) {
+     this.constructorConstructor = new ConstructorConstructor(instanceCreators);
++    this.excluder = excluder;
++    this.fieldNamingStrategy = fieldNamingStrategy;
+     this.serializeNulls = serializeNulls;
+     this.generateNonExecutableJson = generateNonExecutableGson;
+     this.htmlSafe = htmlSafe;
+     this.prettyPrinting = prettyPrinting;
++    this.lenient = lenient;
+ 
+     List<TypeAdapterFactory> factories = new ArrayList<TypeAdapterFactory>();
+ 
+@@ -210,13 +211,18 @@ public final class Gson {
+     factories.add(TypeAdapters.BOOLEAN_FACTORY);
+     factories.add(TypeAdapters.BYTE_FACTORY);
+     factories.add(TypeAdapters.SHORT_FACTORY);
+-    factories.add(TypeAdapters.newFactory(long.class, Long.class,
+-            longAdapter(longSerializationPolicy)));
++    TypeAdapter<Number> longAdapter = longAdapter(longSerializationPolicy);
++    factories.add(TypeAdapters.newFactory(long.class, Long.class, longAdapter));
+     factories.add(TypeAdapters.newFactory(double.class, Double.class,
+             doubleAdapter(serializeSpecialFloatingPointValues)));
+     factories.add(TypeAdapters.newFactory(float.class, Float.class,
+             floatAdapter(serializeSpecialFloatingPointValues)));
+     factories.add(TypeAdapters.NUMBER_FACTORY);
++    factories.add(TypeAdapters.ATOMIC_INTEGER_FACTORY);
++    factories.add(TypeAdapters.ATOMIC_BOOLEAN_FACTORY);
++    factories.add(TypeAdapters.newFactory(AtomicLong.class, atomicLongAdapter(longAdapter)));
++    factories.add(TypeAdapters.newFactory(AtomicLongArray.class, atomicLongArrayAdapter(longAdapter)));
++    factories.add(TypeAdapters.ATOMIC_INTEGER_ARRAY_FACTORY);
+     factories.add(TypeAdapters.CHARACTER_FACTORY);
+     factories.add(TypeAdapters.STRING_BUILDER_FACTORY);
+     factories.add(TypeAdapters.STRING_BUFFER_FACTORY);
+@@ -225,6 +231,7 @@ public final class Gson {
+     factories.add(TypeAdapters.URL_FACTORY);
+     factories.add(TypeAdapters.URI_FACTORY);
+     factories.add(TypeAdapters.UUID_FACTORY);
++    factories.add(TypeAdapters.CURRENCY_FACTORY);
+     factories.add(TypeAdapters.LOCALE_FACTORY);
+     factories.add(TypeAdapters.INET_ADDRESS_FACTORY);
+     factories.add(TypeAdapters.BIT_SET_FACTORY);
+@@ -239,14 +246,31 @@ public final class Gson {
+     // type adapters for composite and user-defined types
+     factories.add(new CollectionTypeAdapterFactory(constructorConstructor));
+     factories.add(new MapTypeAdapterFactory(constructorConstructor, complexMapKeySerialization));
+-    factories.add(new JsonAdapterAnnotationTypeAdapterFactory(constructorConstructor));
++    this.jsonAdapterFactory = new JsonAdapterAnnotationTypeAdapterFactory(constructorConstructor);
++    factories.add(jsonAdapterFactory);
+     factories.add(TypeAdapters.ENUM_FACTORY);
+     factories.add(new ReflectiveTypeAdapterFactory(
+-        constructorConstructor, fieldNamingPolicy, excluder));
++        constructorConstructor, fieldNamingStrategy, excluder, jsonAdapterFactory));
+ 
+     this.factories = Collections.unmodifiableList(factories);
+   }
+ 
++  public Excluder excluder() {
++    return excluder;
++  }
++
++  public FieldNamingStrategy fieldNamingStrategy() {
++    return fieldNamingStrategy;
++  }
++
++  public boolean serializeNulls() {
++    return serializeNulls;
++  }
++
++  public boolean htmlSafe() {
++    return htmlSafe;
++  }
++
+   private TypeAdapter<Number> doubleAdapter(boolean serializeSpecialFloatingPointValues) {
+     if (serializeSpecialFloatingPointValues) {
+       return TypeAdapters.DOUBLE;
+@@ -295,7 +319,7 @@ public final class Gson {
+     };
+   }
+ 
+-  private void checkValidFloatingPoint(double value) {
++  static void checkValidFloatingPoint(double value) {
+     if (Double.isNaN(value) || Double.isInfinite(value)) {
+       throw new IllegalArgumentException(value
+           + " is not a valid double value as per JSON specification. To override this"
+@@ -303,7 +327,7 @@ public final class Gson {
+     }
+   }
+ 
+-  private TypeAdapter<Number> longAdapter(LongSerializationPolicy longSerializationPolicy) {
++  private static TypeAdapter<Number> longAdapter(LongSerializationPolicy longSerializationPolicy) {
+     if (longSerializationPolicy == LongSerializationPolicy.DEFAULT) {
+       return TypeAdapters.LONG;
+     }
+@@ -325,6 +349,45 @@ public final class Gson {
+     };
+   }
+ 
++  private static TypeAdapter<AtomicLong> atomicLongAdapter(final TypeAdapter<Number> longAdapter) {
++    return new TypeAdapter<AtomicLong>() {
++      @Override public void write(JsonWriter out, AtomicLong value) throws IOException {
++        longAdapter.write(out, value.get());
++      }
++      @Override public AtomicLong read(JsonReader in) throws IOException {
++        Number value = longAdapter.read(in);
++        return new AtomicLong(value.longValue());
++      }
++    }.nullSafe();
++  }
++
++  private static TypeAdapter<AtomicLongArray> atomicLongArrayAdapter(final TypeAdapter<Number> longAdapter) {
++    return new TypeAdapter<AtomicLongArray>() {
++      @Override public void write(JsonWriter out, AtomicLongArray value) throws IOException {
++        out.beginArray();
++        for (int i = 0, length = value.length(); i < length; i++) {
++          longAdapter.write(out, value.get(i));
++        }
++        out.endArray();
++      }
++      @Override public AtomicLongArray read(JsonReader in) throws IOException {
++        List<Long> list = new ArrayList<Long>();
++        in.beginArray();
++        while (in.hasNext()) {
++            long value = longAdapter.read(in).longValue();
++            list.add(value);
++        }
++        in.endArray();
++        int length = list.size();
++        AtomicLongArray array = new AtomicLongArray(length);
++        for (int i = 0; i < length; ++i) {
++          array.set(i, list.get(i));
++        }
++        return array;
++      }
++    }.nullSafe();
++  }
++
+   /**
+    * Returns the type adapter for {@code} type.
+    *
+@@ -333,7 +396,7 @@ public final class Gson {
+    */
+   @SuppressWarnings("unchecked")
+   public <T> TypeAdapter<T> getAdapter(TypeToken<T> type) {
+-    TypeAdapter<?> cached = typeTokenCache.get(type);
++    TypeAdapter<?> cached = typeTokenCache.get(type == null ? NULL_KEY_SURROGATE : type);
+     if (cached != null) {
+       return (TypeAdapter<T>) cached;
+     }
+@@ -387,9 +450,9 @@ public final class Gson {
+    *  class StatsTypeAdapterFactory implements TypeAdapterFactory {
+    *    public int numReads = 0;
+    *    public int numWrites = 0;
+-   *    public &lt;T&gt; TypeAdapter&lt;T&gt; create(Gson gson, TypeToken&lt;T&gt; type) {
+-   *      final TypeAdapter&lt;T&gt; delegate = gson.getDelegateAdapter(this, type);
+-   *      return new TypeAdapter&lt;T&gt;() {
++   *    public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> type) {
++   *      final TypeAdapter<T> delegate = gson.getDelegateAdapter(this, type);
++   *      return new TypeAdapter<T>() {
+    *        public void write(JsonWriter out, T value) throws IOException {
+    *          ++numWrites;
+    *          delegate.write(out, value);
+@@ -412,7 +475,7 @@ public final class Gson {
+    *  }</pre>
+    *  Note that this call will skip all factories registered before {@code skipPast}. In case of
+    *  multiple TypeAdapterFactories registered it is up to the caller of this function to insure
+-   *  that the order of registration does not prevent this method from reaching a factory they 
++   *  that the order of registration does not prevent this method from reaching a factory they
+    *  would expect to reply from this call.
+    *  Note that since you can not override type adapter factories for String and Java primitive
+    *  types, our stats factory will not count the number of String or primitives that will be
+@@ -425,12 +488,13 @@ public final class Gson {
+    * @since 2.2
+    */
+   public <T> TypeAdapter<T> getDelegateAdapter(TypeAdapterFactory skipPast, TypeToken<T> type) {
+-    boolean skipPastFound = false;
+-    // Skip past if and only if the specified factory is present in the factories.
+-    // This is useful because the factories created through JsonAdapter annotations are not
+-    // registered in this list.
+-    if (!factories.contains(skipPast)) skipPastFound = true;
++    // Hack. If the skipPast factory isn't registered, assume the factory is being requested via
++    // our @JsonAdapter annotation.
++    if (!factories.contains(skipPast)) {
++      skipPast = jsonAdapterFactory;
++    }
+ 
++    boolean skipPastFound = false;
+     for (TypeAdapterFactory factory : factories) {
+       if (!skipPastFound) {
+         if (factory == skipPast) {
+@@ -638,7 +702,7 @@ public final class Gson {
+       JsonWriter jsonWriter = newJsonWriter(Streams.writerForAppendable(writer));
+       toJson(jsonElement, jsonWriter);
+     } catch (IOException e) {
+-      throw new RuntimeException(e);
++      throw new JsonIOException(e);
+     }
+   }
+ 
+@@ -657,6 +721,15 @@ public final class Gson {
+     return jsonWriter;
+   }
+ 
++  /**
++   * Returns a new JSON reader configured for the settings on this Gson instance.
++   */
++  public JsonReader newJsonReader(Reader reader) {
++    JsonReader jsonReader = new JsonReader(reader);
++    jsonReader.setLenient(lenient);
++    return jsonReader;
++  }
++
+   /**
+    * Writes the JSON for {@code jsonElement} to {@code writer}.
+    * @throws JsonIOException if there was a problem writing to the writer
+@@ -748,7 +821,7 @@ public final class Gson {
+    * @since 1.2
+    */
+   public <T> T fromJson(Reader json, Class<T> classOfT) throws JsonSyntaxException, JsonIOException {
+-    JsonReader jsonReader = new JsonReader(json);
++    JsonReader jsonReader = newJsonReader(json);
+     Object object = fromJson(jsonReader, classOfT);
+     assertFullConsumption(object, jsonReader);
+     return Primitives.wrap(classOfT).cast(object);
+@@ -775,7 +848,7 @@ public final class Gson {
+    */
+   @SuppressWarnings("unchecked")
+   public <T> T fromJson(Reader json, Type typeOfT) throws JsonIOException, JsonSyntaxException {
+-    JsonReader jsonReader = new JsonReader(json);
++    JsonReader jsonReader = newJsonReader(json);
+     T object = (T) fromJson(jsonReader, typeOfT);
+     assertFullConsumption(object, jsonReader);
+     return object;
+diff --git a/gson/src/main/java/com/google/gson/GsonBuilder.java b/gson/src/main/java/com/google/gson/GsonBuilder.java
+index e6c0b8c0..0c917d46 100644
+--- a/gson/src/main/java/com/google/gson/GsonBuilder.java
++++ b/gson/src/main/java/com/google/gson/GsonBuilder.java
+@@ -16,6 +16,7 @@
+ 
+ package com.google.gson;
+ 
++import com.google.gson.stream.JsonReader;
+ import java.lang.reflect.Type;
+ import java.sql.Timestamp;
+ import java.text.DateFormat;
+@@ -28,9 +29,18 @@ import java.util.Map;
+ 
+ import com.google.gson.internal.$Gson$Preconditions;
+ import com.google.gson.internal.Excluder;
++import com.google.gson.internal.bind.TreeTypeAdapter;
+ import com.google.gson.internal.bind.TypeAdapters;
+ import com.google.gson.reflect.TypeToken;
+ 
++import static com.google.gson.Gson.DEFAULT_COMPLEX_MAP_KEYS;
++import static com.google.gson.Gson.DEFAULT_ESCAPE_HTML;
++import static com.google.gson.Gson.DEFAULT_JSON_NON_EXECUTABLE;
++import static com.google.gson.Gson.DEFAULT_LENIENT;
++import static com.google.gson.Gson.DEFAULT_PRETTY_PRINT;
++import static com.google.gson.Gson.DEFAULT_SERIALIZE_NULLS;
++import static com.google.gson.Gson.DEFAULT_SPECIALIZE_FLOAT_VALUES;
++
+ /**
+  * <p>Use this builder to construct a {@link Gson} instance when you need to set configuration
+  * options other than the default. For {@link Gson} with default configuration, it is simpler to
+@@ -74,15 +84,16 @@ public final class GsonBuilder {
+   private final List<TypeAdapterFactory> factories = new ArrayList<TypeAdapterFactory>();
+   /** tree-style hierarchy factories. These come after factories for backwards compatibility. */
+   private final List<TypeAdapterFactory> hierarchyFactories = new ArrayList<TypeAdapterFactory>();
+-  private boolean serializeNulls;
++  private boolean serializeNulls = DEFAULT_SERIALIZE_NULLS;
+   private String datePattern;
+   private int dateStyle = DateFormat.DEFAULT;
+   private int timeStyle = DateFormat.DEFAULT;
+-  private boolean complexMapKeySerialization;
+-  private boolean serializeSpecialFloatingPointValues;
+-  private boolean escapeHtmlChars = true;
+-  private boolean prettyPrinting;
+-  private boolean generateNonExecutableJson;
++  private boolean complexMapKeySerialization = DEFAULT_COMPLEX_MAP_KEYS;
++  private boolean serializeSpecialFloatingPointValues = DEFAULT_SPECIALIZE_FLOAT_VALUES;
++  private boolean escapeHtmlChars = DEFAULT_ESCAPE_HTML;
++  private boolean prettyPrinting = DEFAULT_PRETTY_PRINT;
++  private boolean generateNonExecutableJson = DEFAULT_JSON_NON_EXECUTABLE;
++  private boolean lenient = DEFAULT_LENIENT;
+ 
+   /**
+    * Creates a GsonBuilder instance that can be used to build Gson with various configuration
+@@ -293,7 +304,7 @@ public final class GsonBuilder {
+    * Configures Gson to apply a set of exclusion strategies during both serialization and
+    * deserialization. Each of the {@code strategies} will be applied as a disjunction rule.
+    * This means that if one of the {@code strategies} suggests that a field (or class) should be
+-   * skipped then that field (or object) is skipped during serializaiton/deserialization.
++   * skipped then that field (or object) is skipped during serialization/deserialization.
+    *
+    * @param strategies the set of strategy object to apply during object (de)serialization.
+    * @return a reference to this {@code GsonBuilder} object to fulfill the "Builder" pattern
+@@ -351,6 +362,19 @@ public final class GsonBuilder {
+     return this;
+   }
+ 
++  /**
++   * By default, Gson is strict and only accepts JSON as specified by
++   * <a href="http://www.ietf.org/rfc/rfc4627.txt">RFC 4627</a>. This option makes the parser
++   * liberal in what it accepts.
++   *
++   * @return a reference to this {@code GsonBuilder} object to fulfill the "Builder" pattern
++   * @see JsonReader#setLenient(boolean)
++   */
++  public GsonBuilder setLenient() {
++    lenient = true;
++    return this;
++  }
++
+   /**
+    * By default, Gson escapes HTML characters such as &lt; &gt; etc. Use this option to configure
+    * Gson to pass-through HTML characters as is.
+@@ -544,7 +568,7 @@ public final class GsonBuilder {
+ 
+     return new Gson(excluder, fieldNamingPolicy, instanceCreators,
+         serializeNulls, complexMapKeySerialization,
+-        generateNonExecutableJson, escapeHtmlChars, prettyPrinting,
++        generateNonExecutableJson, escapeHtmlChars, prettyPrinting, lenient,
+         serializeSpecialFloatingPointValues, longSerializationPolicy, factories);
+   }
+ 
+diff --git a/gson/src/main/java/com/google/gson/JsonArray.java b/gson/src/main/java/com/google/gson/JsonArray.java
+index c664a5e1..19299d14 100644
+--- a/gson/src/main/java/com/google/gson/JsonArray.java
++++ b/gson/src/main/java/com/google/gson/JsonArray.java
+@@ -162,7 +162,7 @@ public final class JsonArray extends JsonElement implements Iterable<JsonElement
+   }
+ 
+   /**
+-   * Returns an iterator to navigate the elemetns of the array. Since the array is an ordered list,
++   * Returns an iterator to navigate the elements of the array. Since the array is an ordered list,
+    * the iterator navigates the elements in the order they were inserted.
+    *
+    * @return an iterator to navigate the elements of the array.
+diff --git a/gson/src/main/java/com/google/gson/JsonObject.java b/gson/src/main/java/com/google/gson/JsonObject.java
+index 78c7a177..62101918 100644
+--- a/gson/src/main/java/com/google/gson/JsonObject.java
++++ b/gson/src/main/java/com/google/gson/JsonObject.java
+@@ -132,6 +132,15 @@ public final class JsonObject extends JsonElement {
+     return members.entrySet();
+   }
+ 
++  /**
++   * Returns the number of key/value pairs in the object.
++   *
++   * @return the number of key/value pairs in the object.
++   */
++  public int size() {
++    return members.size();
++  }
++
+   /**
+    * Convenience method to check if a member with the specified name is present in this object.
+    *
+diff --git a/gson/src/main/java/com/google/gson/LongSerializationPolicy.java b/gson/src/main/java/com/google/gson/LongSerializationPolicy.java
+index 3d9a2da1..7b732bab 100644
+--- a/gson/src/main/java/com/google/gson/LongSerializationPolicy.java
++++ b/gson/src/main/java/com/google/gson/LongSerializationPolicy.java
+@@ -32,7 +32,7 @@ public enum LongSerializationPolicy {
+    * {@code {"f":123}}.
+    */
+   DEFAULT() {
+-    public JsonElement serialize(Long value) {
++    @Override public JsonElement serialize(Long value) {
+       return new JsonPrimitive(value);
+     }
+   },
+@@ -43,7 +43,7 @@ public enum LongSerializationPolicy {
+    * {@code {"f":"123"}}.
+    */
+   STRING() {
+-    public JsonElement serialize(Long value) {
++    @Override public JsonElement serialize(Long value) {
+       return new JsonPrimitive(String.valueOf(value));
+     }
+   };
+diff --git a/gson/src/main/java/com/google/gson/annotations/Expose.java b/gson/src/main/java/com/google/gson/annotations/Expose.java
+index 1b9c70df..b66dc4f2 100644
+--- a/gson/src/main/java/com/google/gson/annotations/Expose.java
++++ b/gson/src/main/java/com/google/gson/annotations/Expose.java
+@@ -16,6 +16,7 @@
+ 
+ package com.google.gson.annotations;
+ 
++import java.lang.annotation.Documented;
+ import java.lang.annotation.ElementType;
+ import java.lang.annotation.Retention;
+ import java.lang.annotation.RetentionPolicy;
+@@ -57,6 +58,7 @@ import java.lang.annotation.Target;
+  * @author Inderjeet Singh
+  * @author Joel Leitch
+  */
++@Documented
+ @Retention(RetentionPolicy.RUNTIME)
+ @Target(ElementType.FIELD)
+ public @interface Expose {
+diff --git a/gson/src/main/java/com/google/gson/annotations/JsonAdapter.java b/gson/src/main/java/com/google/gson/annotations/JsonAdapter.java
+index 2ee3e682..a98b27a1 100644
+--- a/gson/src/main/java/com/google/gson/annotations/JsonAdapter.java
++++ b/gson/src/main/java/com/google/gson/annotations/JsonAdapter.java
+@@ -94,4 +94,7 @@ public @interface JsonAdapter {
+   /** Either a {@link TypeAdapter} or {@link TypeAdapterFactory}. */
+   Class<?> value();
+ 
++  /** false, to be able to handle {@code null} values within the adapter, default value is true. */
++  boolean nullSafe() default true;
++
+ }
+diff --git a/gson/src/main/java/com/google/gson/annotations/SerializedName.java b/gson/src/main/java/com/google/gson/annotations/SerializedName.java
+index 06c0a14c..9e8e4b8d 100644
+--- a/gson/src/main/java/com/google/gson/annotations/SerializedName.java
++++ b/gson/src/main/java/com/google/gson/annotations/SerializedName.java
+@@ -16,6 +16,7 @@
+ 
+ package com.google.gson.annotations;
+ 
++import java.lang.annotation.Documented;
+ import java.lang.annotation.ElementType;
+ import java.lang.annotation.Retention;
+ import java.lang.annotation.RetentionPolicy;
+@@ -76,14 +77,17 @@ import java.lang.annotation.Target;
+  * @author Inderjeet Singh
+  * @author Joel Leitch
+  */
++@Documented
+ @Retention(RetentionPolicy.RUNTIME)
+ @Target({ElementType.FIELD, ElementType.METHOD})
+ public @interface SerializedName {
+ 
+   /**
+-   * @return the desired names of the field when it is deserialized or serialized. All of the specified names will be deserialized from.
+-   *   The specified first name is what is used for serialization.
++   * @return the desired name of the field when it is serialized or deserialized
+    */
+   String value();
++  /**
++   * @return the alternative names of the field when it is deserialized
++   */
+   String[] alternate() default {};
+ }
+diff --git a/gson/src/main/java/com/google/gson/annotations/Since.java b/gson/src/main/java/com/google/gson/annotations/Since.java
+index 541f154b..c6b21825 100644
+--- a/gson/src/main/java/com/google/gson/annotations/Since.java
++++ b/gson/src/main/java/com/google/gson/annotations/Since.java
+@@ -16,6 +16,7 @@
+ 
+ package com.google.gson.annotations;
+ 
++import java.lang.annotation.Documented;
+ import java.lang.annotation.ElementType;
+ import java.lang.annotation.Retention;
+ import java.lang.annotation.RetentionPolicy;
+@@ -50,6 +51,7 @@ import java.lang.annotation.Target;
+  * @author Inderjeet Singh
+  * @author Joel Leitch
+  */
++@Documented
+ @Retention(RetentionPolicy.RUNTIME)
+ @Target({ElementType.FIELD, ElementType.TYPE})
+ public @interface Since {
+diff --git a/gson/src/main/java/com/google/gson/annotations/Until.java b/gson/src/main/java/com/google/gson/annotations/Until.java
+index 4648b8a2..676a4b95 100644
+--- a/gson/src/main/java/com/google/gson/annotations/Until.java
++++ b/gson/src/main/java/com/google/gson/annotations/Until.java
+@@ -16,6 +16,7 @@
+ 
+ package com.google.gson.annotations;
+ 
++import java.lang.annotation.Documented;
+ import java.lang.annotation.ElementType;
+ import java.lang.annotation.Retention;
+ import java.lang.annotation.RetentionPolicy;
+@@ -54,6 +55,7 @@ import java.lang.annotation.Target;
+  * @author Joel Leitch
+  * @since 1.3
+  */
++@Documented
+ @Retention(RetentionPolicy.RUNTIME)
+ @Target({ElementType.FIELD, ElementType.TYPE})
+ public @interface Until {
+diff --git a/gson/src/main/java/com/google/gson/internal/$Gson$Types.java b/gson/src/main/java/com/google/gson/internal/$Gson$Types.java
+index 745d0719..017e27ce 100644
+--- a/gson/src/main/java/com/google/gson/internal/$Gson$Types.java
++++ b/gson/src/main/java/com/google/gson/internal/$Gson$Types.java
+@@ -16,9 +16,6 @@
+ 
+ package com.google.gson.internal;
+ 
+-import static com.google.gson.internal.$Gson$Preconditions.checkArgument;
+-import static com.google.gson.internal.$Gson$Preconditions.checkNotNull;
+-
+ import java.io.Serializable;
+ import java.lang.reflect.Array;
+ import java.lang.reflect.GenericArrayType;
+@@ -34,6 +31,9 @@ import java.util.Map;
+ import java.util.NoSuchElementException;
+ import java.util.Properties;
+ 
++import static com.google.gson.internal.$Gson$Preconditions.checkArgument;
++import static com.google.gson.internal.$Gson$Preconditions.checkNotNull;
++
+ /**
+  * Static methods for working with types.
+  *
+@@ -212,7 +212,7 @@ public final class $Gson$Types {
+     }
+   }
+ 
+-  private static int hashCodeOrZero(Object o) {
++  static int hashCodeOrZero(Object o) {
+     return o != null ? o.hashCode() : 0;
+   }
+ 
+@@ -430,7 +430,7 @@ public final class $Gson$Types {
+         : null;
+   }
+ 
+-  private static void checkNotPrimitive(Type type) {
++  static void checkNotPrimitive(Type type) {
+     checkArgument(!(type instanceof Class<?>) || !((Class<?>) type).isPrimitive());
+   }
+ 
+diff --git a/gson/src/main/java/com/google/gson/internal/ConstructorConstructor.java b/gson/src/main/java/com/google/gson/internal/ConstructorConstructor.java
+index 62bae91c..ffe3cb48 100644
+--- a/gson/src/main/java/com/google/gson/internal/ConstructorConstructor.java
++++ b/gson/src/main/java/com/google/gson/internal/ConstructorConstructor.java
+@@ -16,20 +16,16 @@
+ 
+ package com.google.gson.internal;
+ 
+-import com.google.gson.InstanceCreator;
+-import com.google.gson.JsonIOException;
+-import com.google.gson.reflect.TypeToken;
+-
+ import java.lang.reflect.Constructor;
+ import java.lang.reflect.InvocationTargetException;
+ import java.lang.reflect.ParameterizedType;
+ import java.lang.reflect.Type;
++import java.util.ArrayDeque;
+ import java.util.ArrayList;
+ import java.util.Collection;
+ import java.util.EnumSet;
+ import java.util.LinkedHashMap;
+ import java.util.LinkedHashSet;
+-import java.util.LinkedList;
+ import java.util.Map;
+ import java.util.Queue;
+ import java.util.Set;
+@@ -37,6 +33,14 @@ import java.util.SortedMap;
+ import java.util.SortedSet;
+ import java.util.TreeMap;
+ import java.util.TreeSet;
++import java.util.concurrent.ConcurrentHashMap;
++import java.util.concurrent.ConcurrentMap;
++import java.util.concurrent.ConcurrentNavigableMap;
++import java.util.concurrent.ConcurrentSkipListMap;
++
++import com.google.gson.InstanceCreator;
++import com.google.gson.JsonIOException;
++import com.google.gson.reflect.TypeToken;
+ 
+ /**
+  * Returns a function that can construct an instance of a requested type.
+@@ -58,7 +62,7 @@ public final class ConstructorConstructor {
+     final InstanceCreator<T> typeCreator = (InstanceCreator<T>) instanceCreators.get(type);
+     if (typeCreator != null) {
+       return new ObjectConstructor<T>() {
+-        public T construct() {
++        @Override public T construct() {
+           return typeCreator.createInstance(type);
+         }
+       };
+@@ -70,7 +74,7 @@ public final class ConstructorConstructor {
+         (InstanceCreator<T>) instanceCreators.get(rawType);
+     if (rawTypeCreator != null) {
+       return new ObjectConstructor<T>() {
+-        public T construct() {
++        @Override public T construct() {
+           return rawTypeCreator.createInstance(type);
+         }
+       };
+@@ -98,7 +102,7 @@ public final class ConstructorConstructor {
+       }
+       return new ObjectConstructor<T>() {
+         @SuppressWarnings("unchecked") // T is the same raw type as is requested
+-        public T construct() {
++        @Override public T construct() {
+           try {
+             Object[] args = null;
+             return (T) constructor.newInstance(args);
+@@ -130,14 +134,14 @@ public final class ConstructorConstructor {
+     if (Collection.class.isAssignableFrom(rawType)) {
+       if (SortedSet.class.isAssignableFrom(rawType)) {
+         return new ObjectConstructor<T>() {
+-          public T construct() {
++          @Override public T construct() {
+             return (T) new TreeSet<Object>();
+           }
+         };
+       } else if (EnumSet.class.isAssignableFrom(rawType)) {
+         return new ObjectConstructor<T>() {
+           @SuppressWarnings("rawtypes")
+-          public T construct() {
++          @Override public T construct() {
+             if (type instanceof ParameterizedType) {
+               Type elementType = ((ParameterizedType) type).getActualTypeArguments()[0];
+               if (elementType instanceof Class) {
+@@ -152,19 +156,19 @@ public final class ConstructorConstructor {
+         };
+       } else if (Set.class.isAssignableFrom(rawType)) {
+         return new ObjectConstructor<T>() {
+-          public T construct() {
++          @Override public T construct() {
+             return (T) new LinkedHashSet<Object>();
+           }
+         };
+       } else if (Queue.class.isAssignableFrom(rawType)) {
+         return new ObjectConstructor<T>() {
+-          public T construct() {
+-            return (T) new LinkedList<Object>();
++          @Override public T construct() {
++            return (T) new ArrayDeque<Object>();
+           }
+         };
+       } else {
+         return new ObjectConstructor<T>() {
+-          public T construct() {
++          @Override public T construct() {
+             return (T) new ArrayList<Object>();
+           }
+         };
+@@ -172,22 +176,34 @@ public final class ConstructorConstructor {
+     }
+ 
+     if (Map.class.isAssignableFrom(rawType)) {
+-      if (SortedMap.class.isAssignableFrom(rawType)) {
++      if (ConcurrentNavigableMap.class.isAssignableFrom(rawType)) {
++        return new ObjectConstructor<T>() {
++          @Override public T construct() {
++            return (T) new ConcurrentSkipListMap<Object, Object>();
++          }
++        };
++      } else if (ConcurrentMap.class.isAssignableFrom(rawType)) {
++        return new ObjectConstructor<T>() {
++          @Override public T construct() {
++            return (T) new ConcurrentHashMap<Object, Object>();
++          }
++        };
++      } else if (SortedMap.class.isAssignableFrom(rawType)) {
+         return new ObjectConstructor<T>() {
+-          public T construct() {
++          @Override public T construct() {
+             return (T) new TreeMap<Object, Object>();
+           }
+         };
+       } else if (type instanceof ParameterizedType && !(String.class.isAssignableFrom(
+           TypeToken.get(((ParameterizedType) type).getActualTypeArguments()[0]).getRawType()))) {
+         return new ObjectConstructor<T>() {
+-          public T construct() {
++          @Override public T construct() {
+             return (T) new LinkedHashMap<Object, Object>();
+           }
+         };
+       } else {
+         return new ObjectConstructor<T>() {
+-          public T construct() {
++          @Override public T construct() {
+             return (T) new LinkedTreeMap<String, Object>();
+           }
+         };
+@@ -202,7 +218,7 @@ public final class ConstructorConstructor {
+     return new ObjectConstructor<T>() {
+       private final UnsafeAllocator unsafeAllocator = UnsafeAllocator.create();
+       @SuppressWarnings("unchecked")
+-      public T construct() {
++      @Override public T construct() {
+         try {
+           Object newInstance = unsafeAllocator.newInstance(rawType);
+           return (T) newInstance;
+diff --git a/gson/src/main/java/com/google/gson/internal/Excluder.java b/gson/src/main/java/com/google/gson/internal/Excluder.java
+index 1c71e3e7..bef79040 100644
+--- a/gson/src/main/java/com/google/gson/internal/Excluder.java
++++ b/gson/src/main/java/com/google/gson/internal/Excluder.java
+@@ -62,7 +62,7 @@ public final class Excluder implements TypeAdapterFactory, Cloneable {
+     try {
+       return (Excluder) super.clone();
+     } catch (CloneNotSupportedException e) {
+-      throw new AssertionError();
++      throw new AssertionError(e);
+     }
+   }
+ 
+diff --git a/gson/src/main/java/com/google/gson/internal/LinkedHashTreeMap.java b/gson/src/main/java/com/google/gson/internal/LinkedHashTreeMap.java
+index e251ec2f..b2707c50 100644
+--- a/gson/src/main/java/com/google/gson/internal/LinkedHashTreeMap.java
++++ b/gson/src/main/java/com/google/gson/internal/LinkedHashTreeMap.java
+@@ -762,6 +762,9 @@ public final class LinkedHashTreeMap<K, V> extends AbstractMap<K, V> implements
+     Node<K, V> lastReturned = null;
+     int expectedModCount = modCount;
+ 
++    LinkedTreeMapIterator() {
++    }
++
+     public final boolean hasNext() {
+       return next != header;
+     }
+diff --git a/gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java b/gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java
+index c2c84802..80462742 100644
+--- a/gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java
++++ b/gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java
+@@ -528,6 +528,9 @@ public final class LinkedTreeMap<K, V> extends AbstractMap<K, V> implements Seri
+     Node<K, V> lastReturned = null;
+     int expectedModCount = modCount;
+ 
++    LinkedTreeMapIterator() {
++    }
++
+     public final boolean hasNext() {
+       return next != header;
+     }
+@@ -624,4 +627,4 @@ public final class LinkedTreeMap<K, V> extends AbstractMap<K, V> implements Seri
+   private Object writeReplace() throws ObjectStreamException {
+     return new LinkedHashMap<K, V>(this);
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/gson/src/main/java/com/google/gson/internal/Streams.java b/gson/src/main/java/com/google/gson/internal/Streams.java
+index 7f00f11d..ac99910a 100644
+--- a/gson/src/main/java/com/google/gson/internal/Streams.java
++++ b/gson/src/main/java/com/google/gson/internal/Streams.java
+@@ -72,7 +72,6 @@ public final class Streams {
+     TypeAdapters.JSON_ELEMENT.write(writer, element);
+   }
+ 
+-  @SuppressWarnings("resource")
+   public static Writer writerForAppendable(Appendable appendable) {
+     return appendable instanceof Writer ? (Writer) appendable : new AppendableWriter(appendable);
+   }
+@@ -85,7 +84,7 @@ public final class Streams {
+     private final Appendable appendable;
+     private final CurrentWrite currentWrite = new CurrentWrite();
+ 
+-    private AppendableWriter(Appendable appendable) {
++    AppendableWriter(Appendable appendable) {
+       this.appendable = appendable;
+     }
+ 
+diff --git a/gson/src/main/java/com/google/gson/internal/UnsafeAllocator.java b/gson/src/main/java/com/google/gson/internal/UnsafeAllocator.java
+index fce0be37..41e7cd15 100644
+--- a/gson/src/main/java/com/google/gson/internal/UnsafeAllocator.java
++++ b/gson/src/main/java/com/google/gson/internal/UnsafeAllocator.java
+@@ -20,6 +20,7 @@ import java.io.ObjectInputStream;
+ import java.io.ObjectStreamClass;
+ import java.lang.reflect.Field;
+ import java.lang.reflect.Method;
++import java.lang.reflect.Modifier;
+ 
+ /**
+  * Do sneaky things to allocate objects without invoking their constructors.
+@@ -45,6 +46,7 @@ public abstract class UnsafeAllocator {
+         @Override
+         @SuppressWarnings("unchecked")
+         public <T> T newInstance(Class<T> c) throws Exception {
++          assertInstantiable(c);
+           return (T) allocateInstance.invoke(unsafe, c);
+         }
+       };
+@@ -68,6 +70,7 @@ public abstract class UnsafeAllocator {
+         @Override
+         @SuppressWarnings("unchecked")
+         public <T> T newInstance(Class<T> c) throws Exception {
++          assertInstantiable(c);
+           return (T) newInstance.invoke(null, c, constructorId);
+         }
+       };
+@@ -87,6 +90,7 @@ public abstract class UnsafeAllocator {
+         @Override
+         @SuppressWarnings("unchecked")
+         public <T> T newInstance(Class<T> c) throws Exception {
++          assertInstantiable(c);
+           return (T) newInstance.invoke(null, c, Object.class);
+         }
+       };
+@@ -101,4 +105,19 @@ public abstract class UnsafeAllocator {
+       }
+     };
+   }
++
++  /**
++   * Check if the class can be instantiated by unsafe allocator. If the instance has interface or abstract modifiers
++   * throw an {@link java.lang.UnsupportedOperationException}
++   * @param c instance of the class to be checked
++   */
++  private static void assertInstantiable(Class<?> c) {
++    int modifiers = c.getModifiers();
++    if (Modifier.isInterface(modifiers)) {
++      throw new UnsupportedOperationException("Interface can't be instantiated! Interface name: " + c.getName());
++    }
++    if (Modifier.isAbstract(modifiers)) {
++      throw new UnsupportedOperationException("Abstract class can't be instantiated! Class name: " + c.getName());
++    }
++  }
+ }
+diff --git a/gson/src/main/java/com/google/gson/internal/bind/ArrayTypeAdapter.java b/gson/src/main/java/com/google/gson/internal/bind/ArrayTypeAdapter.java
+index 55d7e309..3fb7c056 100644
+--- a/gson/src/main/java/com/google/gson/internal/bind/ArrayTypeAdapter.java
++++ b/gson/src/main/java/com/google/gson/internal/bind/ArrayTypeAdapter.java
+@@ -38,7 +38,7 @@ import com.google.gson.stream.JsonWriter;
+ public final class ArrayTypeAdapter<E> extends TypeAdapter<Object> {
+   public static final TypeAdapterFactory FACTORY = new TypeAdapterFactory() {
+     @SuppressWarnings({"unchecked", "rawtypes"})
+-    public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
++    @Override public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
+       Type type = typeToken.getType();
+       if (!(type instanceof GenericArrayType || type instanceof Class && ((Class<?>) type).isArray())) {
+         return null;
+@@ -60,7 +60,7 @@ public final class ArrayTypeAdapter<E> extends TypeAdapter<Object> {
+     this.componentType = componentType;
+   }
+ 
+-  public Object read(JsonReader in) throws IOException {
++  @Override public Object read(JsonReader in) throws IOException {
+     if (in.peek() == JsonToken.NULL) {
+       in.nextNull();
+       return null;
+diff --git a/gson/src/main/java/com/google/gson/internal/bind/CollectionTypeAdapterFactory.java b/gson/src/main/java/com/google/gson/internal/bind/CollectionTypeAdapterFactory.java
+index 0b95445a..1d57844a 100644
+--- a/gson/src/main/java/com/google/gson/internal/bind/CollectionTypeAdapterFactory.java
++++ b/gson/src/main/java/com/google/gson/internal/bind/CollectionTypeAdapterFactory.java
+@@ -40,6 +40,7 @@ public final class CollectionTypeAdapterFactory implements TypeAdapterFactory {
+     this.constructorConstructor = constructorConstructor;
+   }
+ 
++  @Override
+   public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
+     Type type = typeToken.getType();
+ 
+@@ -69,7 +70,7 @@ public final class CollectionTypeAdapterFactory implements TypeAdapterFactory {
+       this.constructor = constructor;
+     }
+ 
+-    public Collection<E> read(JsonReader in) throws IOException {
++    @Override public Collection<E> read(JsonReader in) throws IOException {
+       if (in.peek() == JsonToken.NULL) {
+         in.nextNull();
+         return null;
+@@ -85,7 +86,7 @@ public final class CollectionTypeAdapterFactory implements TypeAdapterFactory {
+       return collection;
+     }
+ 
+-    public void write(JsonWriter out, Collection<E> collection) throws IOException {
++    @Override public void write(JsonWriter out, Collection<E> collection) throws IOException {
+       if (collection == null) {
+         out.nullValue();
+         return;
+diff --git a/gson/src/main/java/com/google/gson/internal/bind/DateTypeAdapter.java b/gson/src/main/java/com/google/gson/internal/bind/DateTypeAdapter.java
+index f2571724..561af198 100644
+--- a/gson/src/main/java/com/google/gson/internal/bind/DateTypeAdapter.java
++++ b/gson/src/main/java/com/google/gson/internal/bind/DateTypeAdapter.java
+@@ -20,6 +20,7 @@ import com.google.gson.Gson;
+ import com.google.gson.JsonSyntaxException;
+ import com.google.gson.TypeAdapter;
+ import com.google.gson.TypeAdapterFactory;
++import com.google.gson.internal.bind.util.ISO8601Utils;
+ import com.google.gson.reflect.TypeToken;
+ import com.google.gson.stream.JsonReader;
+ import com.google.gson.stream.JsonToken;
+@@ -27,10 +28,9 @@ import com.google.gson.stream.JsonWriter;
+ import java.io.IOException;
+ import java.text.DateFormat;
+ import java.text.ParseException;
+-import java.text.SimpleDateFormat;
++import java.text.ParsePosition;
+ import java.util.Date;
+ import java.util.Locale;
+-import java.util.TimeZone;
+ 
+ /**
+  * Adapter for Date. Although this class appears stateless, it is not.
+@@ -41,7 +41,7 @@ import java.util.TimeZone;
+ public final class DateTypeAdapter extends TypeAdapter<Date> {
+   public static final TypeAdapterFactory FACTORY = new TypeAdapterFactory() {
+     @SuppressWarnings("unchecked") // we use a runtime check to make sure the 'T's equal
+-    public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
++    @Override public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
+       return typeToken.getRawType() == Date.class ? (TypeAdapter<T>) new DateTypeAdapter() : null;
+     }
+   };
+@@ -50,13 +50,6 @@ public final class DateTypeAdapter extends TypeAdapter<Date> {
+       = DateFormat.getDateTimeInstance(DateFormat.DEFAULT, DateFormat.DEFAULT, Locale.US);
+   private final DateFormat localFormat
+       = DateFormat.getDateTimeInstance(DateFormat.DEFAULT, DateFormat.DEFAULT);
+-  private final DateFormat iso8601Format = buildIso8601Format();
+-
+-  private static DateFormat buildIso8601Format() {
+-    DateFormat iso8601Format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
+-    iso8601Format.setTimeZone(TimeZone.getTimeZone("UTC"));
+-    return iso8601Format;
+-  }
+ 
+   @Override public Date read(JsonReader in) throws IOException {
+     if (in.peek() == JsonToken.NULL) {
+@@ -76,7 +69,7 @@ public final class DateTypeAdapter extends TypeAdapter<Date> {
+     } catch (ParseException ignored) {
+     }
+     try {
+-      return iso8601Format.parse(json);
++    	return ISO8601Utils.parse(json, new ParsePosition(0));
+     } catch (ParseException e) {
+       throw new JsonSyntaxException(json, e);
+     }
+@@ -90,4 +83,6 @@ public final class DateTypeAdapter extends TypeAdapter<Date> {
+     String dateFormatAsString = enUsFormat.format(value);
+     out.value(dateFormatAsString);
+   }
++  
++  
+ }
+diff --git a/gson/src/main/java/com/google/gson/internal/bind/JsonAdapterAnnotationTypeAdapterFactory.java b/gson/src/main/java/com/google/gson/internal/bind/JsonAdapterAnnotationTypeAdapterFactory.java
+index 7e0be28f..7cfb910a 100644
+--- a/gson/src/main/java/com/google/gson/internal/bind/JsonAdapterAnnotationTypeAdapterFactory.java
++++ b/gson/src/main/java/com/google/gson/internal/bind/JsonAdapterAnnotationTypeAdapterFactory.java
+@@ -17,6 +17,8 @@
+ package com.google.gson.internal.bind;
+ 
+ import com.google.gson.Gson;
++import com.google.gson.JsonDeserializer;
++import com.google.gson.JsonSerializer;
+ import com.google.gson.TypeAdapter;
+ import com.google.gson.TypeAdapterFactory;
+ import com.google.gson.annotations.JsonAdapter;
+@@ -30,7 +32,6 @@ import com.google.gson.reflect.TypeToken;
+  * @since 2.3
+  */
+ public final class JsonAdapterAnnotationTypeAdapterFactory implements TypeAdapterFactory {
+-
+   private final ConstructorConstructor constructorConstructor;
+ 
+   public JsonAdapterAnnotationTypeAdapterFactory(ConstructorConstructor constructorConstructor) {
+@@ -38,30 +39,44 @@ public final class JsonAdapterAnnotationTypeAdapterFactory implements TypeAdapte
+   }
+ 
+   @SuppressWarnings("unchecked")
++  @Override
+   public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> targetType) {
+-    JsonAdapter annotation = targetType.getRawType().getAnnotation(JsonAdapter.class);
++    Class<? super T> rawType = targetType.getRawType();
++    JsonAdapter annotation = rawType.getAnnotation(JsonAdapter.class);
+     if (annotation == null) {
+       return null;
+     }
+     return (TypeAdapter<T>) getTypeAdapter(constructorConstructor, gson, targetType, annotation);
+   }
+ 
+-  @SuppressWarnings("unchecked") // Casts guarded by conditionals.
+-  static TypeAdapter<?> getTypeAdapter(ConstructorConstructor constructorConstructor, Gson gson,
+-      TypeToken<?> fieldType, JsonAdapter annotation) {
+-    Class<?> value = annotation.value();
+-    if (TypeAdapter.class.isAssignableFrom(value)) {
+-          Class<TypeAdapter<?>> typeAdapter = (Class<TypeAdapter<?>>) value;
+-      return constructorConstructor.get(TypeToken.get(typeAdapter)).construct();
++  @SuppressWarnings({ "unchecked", "rawtypes" }) // Casts guarded by conditionals.
++  TypeAdapter<?> getTypeAdapter(ConstructorConstructor constructorConstructor, Gson gson,
++      TypeToken<?> type, JsonAdapter annotation) {
++    Object instance = constructorConstructor.get(TypeToken.get(annotation.value())).construct();
++
++    TypeAdapter<?> typeAdapter;
++    if (instance instanceof TypeAdapter) {
++      typeAdapter = (TypeAdapter<?>) instance;
++    } else if (instance instanceof TypeAdapterFactory) {
++      typeAdapter = ((TypeAdapterFactory) instance).create(gson, type);
++    } else if (instance instanceof JsonSerializer || instance instanceof JsonDeserializer) {
++      JsonSerializer<?> serializer = instance instanceof JsonSerializer
++          ? (JsonSerializer) instance
++          : null;
++      JsonDeserializer<?> deserializer = instance instanceof JsonDeserializer
++          ? (JsonDeserializer) instance
++          : null;
++      typeAdapter = new TreeTypeAdapter(serializer, deserializer, gson, type, null);
++    } else {
++      throw new IllegalArgumentException(
++          "@JsonAdapter value must be TypeAdapter, TypeAdapterFactory, "
++              + "JsonSerializer or JsonDeserializer reference.");
+     }
+-    if (TypeAdapterFactory.class.isAssignableFrom(value)) {
+-          Class<TypeAdapterFactory> typeAdapterFactory = (Class<TypeAdapterFactory>) value;
+-      return constructorConstructor.get(TypeToken.get(typeAdapterFactory))
+-          .construct()
+-          .create(gson, fieldType);
++
++    if (typeAdapter != null && annotation.nullSafe()) {
++      typeAdapter = typeAdapter.nullSafe();
+     }
+ 
+-    throw new IllegalArgumentException(
+-        "@JsonAdapter value must be TypeAdapter or TypeAdapterFactory reference.");
++    return typeAdapter;
+   }
+ }
+diff --git a/gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java b/gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java
+index 6a836280..01212315 100644
+--- a/gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java
++++ b/gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java
+@@ -25,9 +25,7 @@ import com.google.gson.stream.JsonReader;
+ import com.google.gson.stream.JsonToken;
+ import java.io.IOException;
+ import java.io.Reader;
+-import java.util.ArrayList;
+ import java.util.Iterator;
+-import java.util.List;
+ import java.util.Map;
+ 
+ /**
+@@ -47,35 +45,57 @@ public final class JsonTreeReader extends JsonReader {
+   };
+   private static final Object SENTINEL_CLOSED = new Object();
+ 
+-  private final List<Object> stack = new ArrayList<Object>();
++  /*
++   * The nesting stack. Using a manual array rather than an ArrayList saves 20%.
++   */
++  private Object[] stack = new Object[32];
++  private int stackSize = 0;
++
++  /*
++   * The path members. It corresponds directly to stack: At indices where the
++   * stack contains an object (EMPTY_OBJECT, DANGLING_NAME or NONEMPTY_OBJECT),
++   * pathNames contains the name at this scope. Where it contains an array
++   * (EMPTY_ARRAY, NONEMPTY_ARRAY) pathIndices contains the current index in
++   * that array. Otherwise the value is undefined, and we take advantage of that
++   * by incrementing pathIndices when doing so isn't useful.
++   */
++  private String[] pathNames = new String[32];
++  private int[] pathIndices = new int[32];
+ 
+   public JsonTreeReader(JsonElement element) {
+     super(UNREADABLE_READER);
+-    stack.add(element);
++    push(element);
+   }
+ 
+   @Override public void beginArray() throws IOException {
+     expect(JsonToken.BEGIN_ARRAY);
+     JsonArray array = (JsonArray) peekStack();
+-    stack.add(array.iterator());
++    push(array.iterator());
++    pathIndices[stackSize - 1] = 0;
+   }
+ 
+   @Override public void endArray() throws IOException {
+     expect(JsonToken.END_ARRAY);
+     popStack(); // empty iterator
+     popStack(); // array
++    if (stackSize > 0) {
++      pathIndices[stackSize - 1]++;
++    }
+   }
+ 
+   @Override public void beginObject() throws IOException {
+     expect(JsonToken.BEGIN_OBJECT);
+     JsonObject object = (JsonObject) peekStack();
+-    stack.add(object.entrySet().iterator());
++    push(object.entrySet().iterator());
+   }
+ 
+   @Override public void endObject() throws IOException {
+     expect(JsonToken.END_OBJECT);
+     popStack(); // empty iterator
+     popStack(); // object
++    if (stackSize > 0) {
++      pathIndices[stackSize - 1]++;
++    }
+   }
+ 
+   @Override public boolean hasNext() throws IOException {
+@@ -84,19 +104,19 @@ public final class JsonTreeReader extends JsonReader {
+   }
+ 
+   @Override public JsonToken peek() throws IOException {
+-    if (stack.isEmpty()) {
++    if (stackSize == 0) {
+       return JsonToken.END_DOCUMENT;
+     }
+ 
+     Object o = peekStack();
+     if (o instanceof Iterator) {
+-      boolean isObject = stack.get(stack.size() - 2) instanceof JsonObject;
++      boolean isObject = stack[stackSize - 2] instanceof JsonObject;
+       Iterator<?> iterator = (Iterator<?>) o;
+       if (iterator.hasNext()) {
+         if (isObject) {
+           return JsonToken.NAME;
+         } else {
+-          stack.add(iterator.next());
++          push(iterator.next());
+           return peek();
+         }
+       } else {
+@@ -127,16 +147,19 @@ public final class JsonTreeReader extends JsonReader {
+   }
+ 
+   private Object peekStack() {
+-    return stack.get(stack.size() - 1);
++    return stack[stackSize - 1];
+   }
+ 
+   private Object popStack() {
+-    return stack.remove(stack.size() - 1);
++    Object result = stack[--stackSize];
++    stack[stackSize] = null;
++    return result;
+   }
+ 
+   private void expect(JsonToken expected) throws IOException {
+     if (peek() != expected) {
+-      throw new IllegalStateException("Expected " + expected + " but was " + peek());
++      throw new IllegalStateException(
++          "Expected " + expected + " but was " + peek() + locationString());
+     }
+   }
+ 
+@@ -144,72 +167,101 @@ public final class JsonTreeReader extends JsonReader {
+     expect(JsonToken.NAME);
+     Iterator<?> i = (Iterator<?>) peekStack();
+     Map.Entry<?, ?> entry = (Map.Entry<?, ?>) i.next();
+-    stack.add(entry.getValue());
+-    return (String) entry.getKey();
++    String result = (String) entry.getKey();
++    pathNames[stackSize - 1] = result;
++    push(entry.getValue());
++    return result;
+   }
+ 
+   @Override public String nextString() throws IOException {
+     JsonToken token = peek();
+     if (token != JsonToken.STRING && token != JsonToken.NUMBER) {
+-      throw new IllegalStateException("Expected " + JsonToken.STRING + " but was " + token);
++      throw new IllegalStateException(
++          "Expected " + JsonToken.STRING + " but was " + token + locationString());
++    }
++    String result = ((JsonPrimitive) popStack()).getAsString();
++    if (stackSize > 0) {
++      pathIndices[stackSize - 1]++;
+     }
+-    return ((JsonPrimitive) popStack()).getAsString();
++    return result;
+   }
+ 
+   @Override public boolean nextBoolean() throws IOException {
+     expect(JsonToken.BOOLEAN);
+-    return ((JsonPrimitive) popStack()).getAsBoolean();
++    boolean result = ((JsonPrimitive) popStack()).getAsBoolean();
++    if (stackSize > 0) {
++      pathIndices[stackSize - 1]++;
++    }
++    return result;
+   }
+ 
+   @Override public void nextNull() throws IOException {
+     expect(JsonToken.NULL);
+     popStack();
++    if (stackSize > 0) {
++      pathIndices[stackSize - 1]++;
++    }
+   }
+ 
+   @Override public double nextDouble() throws IOException {
+     JsonToken token = peek();
+     if (token != JsonToken.NUMBER && token != JsonToken.STRING) {
+-      throw new IllegalStateException("Expected " + JsonToken.NUMBER + " but was " + token);
++      throw new IllegalStateException(
++          "Expected " + JsonToken.NUMBER + " but was " + token + locationString());
+     }
+     double result = ((JsonPrimitive) peekStack()).getAsDouble();
+     if (!isLenient() && (Double.isNaN(result) || Double.isInfinite(result))) {
+       throw new NumberFormatException("JSON forbids NaN and infinities: " + result);
+     }
+     popStack();
++    if (stackSize > 0) {
++      pathIndices[stackSize - 1]++;
++    }
+     return result;
+   }
+ 
+   @Override public long nextLong() throws IOException {
+     JsonToken token = peek();
+     if (token != JsonToken.NUMBER && token != JsonToken.STRING) {
+-      throw new IllegalStateException("Expected " + JsonToken.NUMBER + " but was " + token);
++      throw new IllegalStateException(
++          "Expected " + JsonToken.NUMBER + " but was " + token + locationString());
+     }
+     long result = ((JsonPrimitive) peekStack()).getAsLong();
+     popStack();
++    if (stackSize > 0) {
++      pathIndices[stackSize - 1]++;
++    }
+     return result;
+   }
+ 
+   @Override public int nextInt() throws IOException {
+     JsonToken token = peek();
+     if (token != JsonToken.NUMBER && token != JsonToken.STRING) {
+-      throw new IllegalStateException("Expected " + JsonToken.NUMBER + " but was " + token);
++      throw new IllegalStateException(
++          "Expected " + JsonToken.NUMBER + " but was " + token + locationString());
+     }
+     int result = ((JsonPrimitive) peekStack()).getAsInt();
+     popStack();
++    if (stackSize > 0) {
++      pathIndices[stackSize - 1]++;
++    }
+     return result;
+   }
+ 
+   @Override public void close() throws IOException {
+-    stack.clear();
+-    stack.add(SENTINEL_CLOSED);
++    stack = new Object[] { SENTINEL_CLOSED };
++    stackSize = 1;
+   }
+ 
+   @Override public void skipValue() throws IOException {
+     if (peek() == JsonToken.NAME) {
+       nextName();
++      pathNames[stackSize - 2] = "null";
+     } else {
+       popStack();
++      pathNames[stackSize - 1] = "null";
+     }
++    pathIndices[stackSize - 1]++;
+   }
+ 
+   @Override public String toString() {
+@@ -220,7 +272,45 @@ public final class JsonTreeReader extends JsonReader {
+     expect(JsonToken.NAME);
+     Iterator<?> i = (Iterator<?>) peekStack();
+     Map.Entry<?, ?> entry = (Map.Entry<?, ?>) i.next();
+-    stack.add(entry.getValue());
+-    stack.add(new JsonPrimitive((String)entry.getKey()));
++    push(entry.getValue());
++    push(new JsonPrimitive((String) entry.getKey()));
++  }
++
++  private void push(Object newTop) {
++    if (stackSize == stack.length) {
++      Object[] newStack = new Object[stackSize * 2];
++      int[] newPathIndices = new int[stackSize * 2];
++      String[] newPathNames = new String[stackSize * 2];
++      System.arraycopy(stack, 0, newStack, 0, stackSize);
++      System.arraycopy(pathIndices, 0, newPathIndices, 0, stackSize);
++      System.arraycopy(pathNames, 0, newPathNames, 0, stackSize);
++      stack = newStack;
++      pathIndices = newPathIndices;
++      pathNames = newPathNames;
++    }
++    stack[stackSize++] = newTop;
++  }
++
++  @Override public String getPath() {
++    StringBuilder result = new StringBuilder().append('$');
++    for (int i = 0; i < stackSize; i++) {
++      if (stack[i] instanceof JsonArray) {
++        if (stack[++i] instanceof Iterator) {
++          result.append('[').append(pathIndices[i]).append(']');
++        }
++      } else if (stack[i] instanceof JsonObject) {
++        if (stack[++i] instanceof Iterator) {
++          result.append('.');
++          if (pathNames[i] != null) {
++            result.append(pathNames[i]);
++          }
++        }
++      }
++    }
++    return result.toString();
++  }
++
++  private String locationString() {
++    return " at path " + getPath();
+   }
+ }
+diff --git a/gson/src/main/java/com/google/gson/internal/bind/JsonTreeWriter.java b/gson/src/main/java/com/google/gson/internal/bind/JsonTreeWriter.java
+index 5f9f0395..51dc1f3a 100644
+--- a/gson/src/main/java/com/google/gson/internal/bind/JsonTreeWriter.java
++++ b/gson/src/main/java/com/google/gson/internal/bind/JsonTreeWriter.java
+@@ -159,6 +159,14 @@ public final class JsonTreeWriter extends JsonWriter {
+     return this;
+   }
+ 
++  @Override public JsonWriter value(Boolean value) throws IOException {
++    if (value == null) {
++      return nullValue();
++    }
++    put(new JsonPrimitive(value));
++    return this;
++  }
++
+   @Override public JsonWriter value(double value) throws IOException {
+     if (!isLenient() && (Double.isNaN(value) || Double.isInfinite(value))) {
+       throw new IllegalArgumentException("JSON forbids NaN and infinities: " + value);
+diff --git a/gson/src/main/java/com/google/gson/internal/bind/MapTypeAdapterFactory.java b/gson/src/main/java/com/google/gson/internal/bind/MapTypeAdapterFactory.java
+index c3c616c4..1682aad0 100644
+--- a/gson/src/main/java/com/google/gson/internal/bind/MapTypeAdapterFactory.java
++++ b/gson/src/main/java/com/google/gson/internal/bind/MapTypeAdapterFactory.java
+@@ -104,7 +104,7 @@ import java.util.Map;
+  */
+ public final class MapTypeAdapterFactory implements TypeAdapterFactory {
+   private final ConstructorConstructor constructorConstructor;
+-  private final boolean complexMapKeySerialization;
++  final boolean complexMapKeySerialization;
+ 
+   public MapTypeAdapterFactory(ConstructorConstructor constructorConstructor,
+       boolean complexMapKeySerialization) {
+@@ -112,7 +112,7 @@ public final class MapTypeAdapterFactory implements TypeAdapterFactory {
+     this.complexMapKeySerialization = complexMapKeySerialization;
+   }
+ 
+-  public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
++  @Override public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
+     Type type = typeToken.getType();
+ 
+     Class<? super T> rawType = typeToken.getRawType();
+@@ -157,7 +157,7 @@ public final class MapTypeAdapterFactory implements TypeAdapterFactory {
+       this.constructor = constructor;
+     }
+ 
+-    public Map<K, V> read(JsonReader in) throws IOException {
++    @Override public Map<K, V> read(JsonReader in) throws IOException {
+       JsonToken peek = in.peek();
+       if (peek == JsonToken.NULL) {
+         in.nextNull();
+@@ -195,7 +195,7 @@ public final class MapTypeAdapterFactory implements TypeAdapterFactory {
+       return map;
+     }
+ 
+-    public void write(JsonWriter out, Map<K, V> map) throws IOException {
++    @Override public void write(JsonWriter out, Map<K, V> map) throws IOException {
+       if (map == null) {
+         out.nullValue();
+         return;
+diff --git a/gson/src/main/java/com/google/gson/internal/bind/ObjectTypeAdapter.java b/gson/src/main/java/com/google/gson/internal/bind/ObjectTypeAdapter.java
+index 235d2b38..ec42e048 100644
+--- a/gson/src/main/java/com/google/gson/internal/bind/ObjectTypeAdapter.java
++++ b/gson/src/main/java/com/google/gson/internal/bind/ObjectTypeAdapter.java
+@@ -37,7 +37,7 @@ import java.util.Map;
+ public final class ObjectTypeAdapter extends TypeAdapter<Object> {
+   public static final TypeAdapterFactory FACTORY = new TypeAdapterFactory() {
+     @SuppressWarnings("unchecked")
+-    public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> type) {
++    @Override public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> type) {
+       if (type.getRawType() == Object.class) {
+         return (TypeAdapter<T>) new ObjectTypeAdapter(gson);
+       }
+@@ -47,7 +47,7 @@ public final class ObjectTypeAdapter extends TypeAdapter<Object> {
+ 
+   private final Gson gson;
+ 
+-  private ObjectTypeAdapter(Gson gson) {
++  ObjectTypeAdapter(Gson gson) {
+     this.gson = gson;
+   }
+ 
+diff --git a/gson/src/main/java/com/google/gson/internal/bind/ReflectiveTypeAdapterFactory.java b/gson/src/main/java/com/google/gson/internal/bind/ReflectiveTypeAdapterFactory.java
+index 3957c369..34e97664 100644
+--- a/gson/src/main/java/com/google/gson/internal/bind/ReflectiveTypeAdapterFactory.java
++++ b/gson/src/main/java/com/google/gson/internal/bind/ReflectiveTypeAdapterFactory.java
+@@ -16,16 +16,6 @@
+ 
+ package com.google.gson.internal.bind;
+ 
+-import static com.google.gson.internal.bind.JsonAdapterAnnotationTypeAdapterFactory.getTypeAdapter;
+-
+-import java.io.IOException;
+-import java.lang.reflect.Field;
+-import java.lang.reflect.Type;
+-import java.util.LinkedHashMap;
+-import java.util.LinkedList;
+-import java.util.List;
+-import java.util.Map;
+-
+ import com.google.gson.FieldNamingStrategy;
+ import com.google.gson.Gson;
+ import com.google.gson.JsonSyntaxException;
+@@ -42,6 +32,14 @@ import com.google.gson.reflect.TypeToken;
+ import com.google.gson.stream.JsonReader;
+ import com.google.gson.stream.JsonToken;
+ import com.google.gson.stream.JsonWriter;
++import java.io.IOException;
++import java.lang.reflect.Field;
++import java.lang.reflect.Type;
++import java.util.ArrayList;
++import java.util.Collections;
++import java.util.LinkedHashMap;
++import java.util.List;
++import java.util.Map;
+ 
+ /**
+  * Type adapter that reflects over the fields and methods of a class.
+@@ -50,12 +48,15 @@ public final class ReflectiveTypeAdapterFactory implements TypeAdapterFactory {
+   private final ConstructorConstructor constructorConstructor;
+   private final FieldNamingStrategy fieldNamingPolicy;
+   private final Excluder excluder;
++  private final JsonAdapterAnnotationTypeAdapterFactory jsonAdapterFactory;
+ 
+   public ReflectiveTypeAdapterFactory(ConstructorConstructor constructorConstructor,
+-      FieldNamingStrategy fieldNamingPolicy, Excluder excluder) {
++      FieldNamingStrategy fieldNamingPolicy, Excluder excluder,
++      JsonAdapterAnnotationTypeAdapterFactory jsonAdapterFactory) {
+     this.constructorConstructor = constructorConstructor;
+     this.fieldNamingPolicy = fieldNamingPolicy;
+     this.excluder = excluder;
++    this.jsonAdapterFactory = jsonAdapterFactory;
+   }
+ 
+   public boolean excludeField(Field f, boolean serialize) {
+@@ -68,25 +69,27 @@ public final class ReflectiveTypeAdapterFactory implements TypeAdapterFactory {
+ 
+   /** first element holds the default name */
+   private List<String> getFieldNames(Field f) {
+-    return getFieldName(fieldNamingPolicy, f);
+-  }
++    SerializedName annotation = f.getAnnotation(SerializedName.class);
++    if (annotation == null) {
++      String name = fieldNamingPolicy.translateName(f);
++      return Collections.singletonList(name);
++    }
+ 
+-  /** first element holds the default name */
+-  static List<String> getFieldName(FieldNamingStrategy fieldNamingPolicy, Field f) {
+-    SerializedName serializedName = f.getAnnotation(SerializedName.class);
+-    List<String> fieldNames = new LinkedList<String>();
+-    if (serializedName == null) {
+-      fieldNames.add(fieldNamingPolicy.translateName(f));
+-    } else {
+-      fieldNames.add(serializedName.value());
+-      for (String alternate : serializedName.alternate()) {
+-        fieldNames.add(alternate);
+-      }
++    String serializedName = annotation.value();
++    String[] alternates = annotation.alternate();
++    if (alternates.length == 0) {
++      return Collections.singletonList(serializedName);
++    }
++
++    List<String> fieldNames = new ArrayList<String>(alternates.length + 1);
++    fieldNames.add(serializedName);
++    for (String alternate : alternates) {
++      fieldNames.add(alternate);
+     }
+     return fieldNames;
+   }
+ 
+-  public <T> TypeAdapter<T> create(Gson gson, final TypeToken<T> type) {
++  @Override public <T> TypeAdapter<T> create(Gson gson, final TypeToken<T> type) {
+     Class<? super T> raw = type.getRawType();
+ 
+     if (!Object.class.isAssignableFrom(raw)) {
+@@ -102,14 +105,23 @@ public final class ReflectiveTypeAdapterFactory implements TypeAdapterFactory {
+       final TypeToken<?> fieldType, boolean serialize, boolean deserialize) {
+     final boolean isPrimitive = Primitives.isPrimitive(fieldType.getRawType());
+     // special casing primitives here saves ~5% on Android...
++    JsonAdapter annotation = field.getAnnotation(JsonAdapter.class);
++    TypeAdapter<?> mapped = null;
++    if (annotation != null) {
++      mapped = jsonAdapterFactory.getTypeAdapter(
++          constructorConstructor, context, fieldType, annotation);
++    }
++    final boolean jsonAdapterPresent = mapped != null;
++    if (mapped == null) mapped = context.getAdapter(fieldType);
++
++    final TypeAdapter<?> typeAdapter = mapped;
+     return new ReflectiveTypeAdapterFactory.BoundField(name, serialize, deserialize) {
+-      final TypeAdapter<?> typeAdapter = getFieldAdapter(context, field, fieldType);
+       @SuppressWarnings({"unchecked", "rawtypes"}) // the type adapter and field type always agree
+       @Override void write(JsonWriter writer, Object value)
+           throws IOException, IllegalAccessException {
+         Object fieldValue = field.get(value);
+-        TypeAdapter t =
+-          new TypeAdapterRuntimeTypeWrapper(context, this.typeAdapter, fieldType.getType());
++        TypeAdapter t = jsonAdapterPresent ? typeAdapter
++            : new TypeAdapterRuntimeTypeWrapper(context, typeAdapter, fieldType.getType());
+         t.write(writer, fieldValue);
+       }
+       @Override void read(JsonReader reader, Object value)
+@@ -119,7 +131,7 @@ public final class ReflectiveTypeAdapterFactory implements TypeAdapterFactory {
+           field.set(value, fieldValue);
+         }
+       }
+-      public boolean writeField(Object value) throws IOException, IllegalAccessException {
++      @Override public boolean writeField(Object value) throws IOException, IllegalAccessException {
+         if (!serialized) return false;
+         Object fieldValue = field.get(value);
+         return fieldValue != value; // avoid recursion for example for Throwable.cause
+@@ -127,15 +139,6 @@ public final class ReflectiveTypeAdapterFactory implements TypeAdapterFactory {
+     };
+   }
+ 
+-  private TypeAdapter<?> getFieldAdapter(Gson gson, Field field, TypeToken<?> fieldType) {
+-    JsonAdapter annotation = field.getAnnotation(JsonAdapter.class);
+-    if (annotation != null) {
+-      TypeAdapter<?> adapter = getTypeAdapter(constructorConstructor, gson, fieldType, annotation);
+-      if (adapter != null) return adapter;
+-    }
+-    return gson.getAdapter(fieldType);
+-  }
+-
+   private Map<String, BoundField> getBoundFields(Gson context, TypeToken<?> type, Class<?> raw) {
+     Map<String, BoundField> result = new LinkedHashMap<String, BoundField>();
+     if (raw.isInterface()) {
+@@ -193,7 +196,7 @@ public final class ReflectiveTypeAdapterFactory implements TypeAdapterFactory {
+     private final ObjectConstructor<T> constructor;
+     private final Map<String, BoundField> boundFields;
+ 
+-    private Adapter(ObjectConstructor<T> constructor, Map<String, BoundField> boundFields) {
++    Adapter(ObjectConstructor<T> constructor, Map<String, BoundField> boundFields) {
+       this.constructor = constructor;
+       this.boundFields = boundFields;
+     }
+@@ -241,7 +244,7 @@ public final class ReflectiveTypeAdapterFactory implements TypeAdapterFactory {
+           }
+         }
+       } catch (IllegalAccessException e) {
+-        throw new AssertionError();
++        throw new AssertionError(e);
+       }
+       out.endObject();
+     }
+diff --git a/gson/src/main/java/com/google/gson/internal/bind/SqlDateTypeAdapter.java b/gson/src/main/java/com/google/gson/internal/bind/SqlDateTypeAdapter.java
+index 5ecc2e96..5ec244f2 100644
+--- a/gson/src/main/java/com/google/gson/internal/bind/SqlDateTypeAdapter.java
++++ b/gson/src/main/java/com/google/gson/internal/bind/SqlDateTypeAdapter.java
+@@ -38,7 +38,7 @@ import java.text.SimpleDateFormat;
+ public final class SqlDateTypeAdapter extends TypeAdapter<java.sql.Date> {
+   public static final TypeAdapterFactory FACTORY = new TypeAdapterFactory() {
+     @SuppressWarnings("unchecked") // we use a runtime check to make sure the 'T's equal
+-    public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
++    @Override public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
+       return typeToken.getRawType() == java.sql.Date.class
+           ? (TypeAdapter<T>) new SqlDateTypeAdapter() : null;
+     }
+diff --git a/gson/src/main/java/com/google/gson/internal/bind/TimeTypeAdapter.java b/gson/src/main/java/com/google/gson/internal/bind/TimeTypeAdapter.java
+index bbbb4d97..55d4b2f6 100644
+--- a/gson/src/main/java/com/google/gson/internal/bind/TimeTypeAdapter.java
++++ b/gson/src/main/java/com/google/gson/internal/bind/TimeTypeAdapter.java
+@@ -40,7 +40,7 @@ import java.util.Date;
+ public final class TimeTypeAdapter extends TypeAdapter<Time> {
+   public static final TypeAdapterFactory FACTORY = new TypeAdapterFactory() {
+     @SuppressWarnings("unchecked") // we use a runtime check to make sure the 'T's equal
+-    public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
++    @Override public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
+       return typeToken.getRawType() == Time.class ? (TypeAdapter<T>) new TimeTypeAdapter() : null;
+     }
+   };
+diff --git a/gson/src/main/java/com/google/gson/TreeTypeAdapter.java b/gson/src/main/java/com/google/gson/internal/bind/TreeTypeAdapter.java
+similarity index 77%
+rename from gson/src/main/java/com/google/gson/TreeTypeAdapter.java
+rename to gson/src/main/java/com/google/gson/internal/bind/TreeTypeAdapter.java
+index a05c1fe0..e13e3489 100644
+--- a/gson/src/main/java/com/google/gson/TreeTypeAdapter.java
++++ b/gson/src/main/java/com/google/gson/internal/bind/TreeTypeAdapter.java
+@@ -14,31 +14,42 @@
+  * limitations under the License.
+  */
+ 
+-package com.google.gson;
++package com.google.gson.internal.bind;
+ 
++import com.google.gson.Gson;
++import com.google.gson.JsonDeserializationContext;
++import com.google.gson.JsonDeserializer;
++import com.google.gson.JsonElement;
++import com.google.gson.JsonParseException;
++import com.google.gson.JsonSerializationContext;
++import com.google.gson.JsonSerializer;
++import com.google.gson.TypeAdapter;
++import com.google.gson.TypeAdapterFactory;
+ import com.google.gson.internal.$Gson$Preconditions;
+ import com.google.gson.internal.Streams;
+ import com.google.gson.reflect.TypeToken;
+ import com.google.gson.stream.JsonReader;
+ import com.google.gson.stream.JsonWriter;
+ import java.io.IOException;
++import java.lang.reflect.Type;
+ 
+ /**
+  * Adapts a Gson 1.x tree-style adapter as a streaming TypeAdapter. Since the
+  * tree adapter may be serialization-only or deserialization-only, this class
+  * has a facility to lookup a delegate type adapter on demand.
+  */
+-final class TreeTypeAdapter<T> extends TypeAdapter<T> {
++public final class TreeTypeAdapter<T> extends TypeAdapter<T> {
+   private final JsonSerializer<T> serializer;
+   private final JsonDeserializer<T> deserializer;
+   private final Gson gson;
+   private final TypeToken<T> typeToken;
+   private final TypeAdapterFactory skipPast;
++  private final GsonContextImpl context = new GsonContextImpl();
+ 
+   /** The delegate is lazily created because it may not be needed, and creating it may fail. */
+   private TypeAdapter<T> delegate;
+ 
+-  private TreeTypeAdapter(JsonSerializer<T> serializer, JsonDeserializer<T> deserializer,
++  public TreeTypeAdapter(JsonSerializer<T> serializer, JsonDeserializer<T> deserializer,
+       Gson gson, TypeToken<T> typeToken, TypeAdapterFactory skipPast) {
+     this.serializer = serializer;
+     this.deserializer = deserializer;
+@@ -55,7 +66,7 @@ final class TreeTypeAdapter<T> extends TypeAdapter<T> {
+     if (value.isJsonNull()) {
+       return null;
+     }
+-    return deserializer.deserialize(value, typeToken.getType(), gson.deserializationContext);
++    return deserializer.deserialize(value, typeToken.getType(), context);
+   }
+ 
+   @Override public void write(JsonWriter out, T value) throws IOException {
+@@ -67,7 +78,7 @@ final class TreeTypeAdapter<T> extends TypeAdapter<T> {
+       out.nullValue();
+       return;
+     }
+-    JsonElement tree = serializer.serialize(value, typeToken.getType(), gson.serializationContext);
++    JsonElement tree = serializer.serialize(value, typeToken.getType(), context);
+     Streams.write(tree, out);
+   }
+ 
+@@ -105,14 +116,14 @@ final class TreeTypeAdapter<T> extends TypeAdapter<T> {
+     return new SingleTypeFactory(typeAdapter, null, false, hierarchyType);
+   }
+ 
+-  private static class SingleTypeFactory implements TypeAdapterFactory {
++  private static final class SingleTypeFactory implements TypeAdapterFactory {
+     private final TypeToken<?> exactType;
+     private final boolean matchRawType;
+     private final Class<?> hierarchyType;
+     private final JsonSerializer<?> serializer;
+     private final JsonDeserializer<?> deserializer;
+ 
+-    private SingleTypeFactory(Object typeAdapter, TypeToken<?> exactType, boolean matchRawType,
++    SingleTypeFactory(Object typeAdapter, TypeToken<?> exactType, boolean matchRawType,
+         Class<?> hierarchyType) {
+       serializer = typeAdapter instanceof JsonSerializer
+           ? (JsonSerializer<?>) typeAdapter
+@@ -127,6 +138,7 @@ final class TreeTypeAdapter<T> extends TypeAdapter<T> {
+     }
+ 
+     @SuppressWarnings("unchecked") // guarded by typeToken.equals() call
++    @Override
+     public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> type) {
+       boolean matches = exactType != null
+           ? exactType.equals(type) || matchRawType && exactType.getType() == type.getRawType()
+@@ -137,4 +149,17 @@ final class TreeTypeAdapter<T> extends TypeAdapter<T> {
+           : null;
+     }
+   }
++
++  private final class GsonContextImpl implements JsonSerializationContext, JsonDeserializationContext {
++    @Override public JsonElement serialize(Object src) {
++      return gson.toJsonTree(src);
++    }
++    @Override public JsonElement serialize(Object src, Type typeOfSrc) {
++      return gson.toJsonTree(src, typeOfSrc);
++    }
++    @SuppressWarnings("unchecked")
++    @Override public <R> R deserialize(JsonElement json, Type typeOfT) throws JsonParseException {
++      return (R) gson.fromJson(json, typeOfT);
++    }
++  };
+ }
+diff --git a/gson/src/main/java/com/google/gson/internal/bind/TypeAdapterRuntimeTypeWrapper.java b/gson/src/main/java/com/google/gson/internal/bind/TypeAdapterRuntimeTypeWrapper.java
+index 7e52c27d..2bf37ad0 100644
+--- a/gson/src/main/java/com/google/gson/internal/bind/TypeAdapterRuntimeTypeWrapper.java
++++ b/gson/src/main/java/com/google/gson/internal/bind/TypeAdapterRuntimeTypeWrapper.java
+@@ -15,14 +15,15 @@
+  */
+ package com.google.gson.internal.bind;
+ 
++import java.io.IOException;
++import java.lang.reflect.Type;
++import java.lang.reflect.TypeVariable;
++
+ import com.google.gson.Gson;
+ import com.google.gson.TypeAdapter;
+ import com.google.gson.reflect.TypeToken;
+ import com.google.gson.stream.JsonReader;
+ import com.google.gson.stream.JsonWriter;
+-import java.io.IOException;
+-import java.lang.reflect.Type;
+-import java.lang.reflect.TypeVariable;
+ 
+ final class TypeAdapterRuntimeTypeWrapper<T> extends TypeAdapter<T> {
+   private final Gson context;
+diff --git a/gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java b/gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java
+index ec7ceb4f..6a51c64e 100644
+--- a/gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java
++++ b/gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java
+@@ -24,15 +24,21 @@ import java.net.URI;
+ import java.net.URISyntaxException;
+ import java.net.URL;
+ import java.sql.Timestamp;
++import java.util.ArrayList;
+ import java.util.BitSet;
+ import java.util.Calendar;
++import java.util.Currency;
+ import java.util.Date;
+ import java.util.GregorianCalendar;
+ import java.util.HashMap;
++import java.util.List;
+ import java.util.Locale;
+ import java.util.Map;
+ import java.util.StringTokenizer;
+ import java.util.UUID;
++import java.util.concurrent.atomic.AtomicBoolean;
++import java.util.concurrent.atomic.AtomicInteger;
++import java.util.concurrent.atomic.AtomicIntegerArray;
+ 
+ import com.google.gson.Gson;
+ import com.google.gson.JsonArray;
+@@ -84,7 +90,7 @@ public final class TypeAdapters {
+   public static final TypeAdapterFactory CLASS_FACTORY = newFactory(Class.class, CLASS);
+ 
+   public static final TypeAdapter<BitSet> BIT_SET = new TypeAdapter<BitSet>() {
+-    public BitSet read(JsonReader in) throws IOException {
++    @Override public BitSet read(JsonReader in) throws IOException {
+       if (in.peek() == JsonToken.NULL) {
+         in.nextNull();
+         return null;
+@@ -125,7 +131,7 @@ public final class TypeAdapters {
+       return bitset;
+     }
+ 
+-    public void write(JsonWriter out, BitSet src) throws IOException {
++    @Override public void write(JsonWriter out, BitSet src) throws IOException {
+       if (src == null) {
+         out.nullValue();
+         return;
+@@ -156,10 +162,6 @@ public final class TypeAdapters {
+     }
+     @Override
+     public void write(JsonWriter out, Boolean value) throws IOException {
+-      if (value == null) {
+-        out.nullValue();
+-        return;
+-      }
+       out.value(value);
+     }
+   };
+@@ -248,10 +250,66 @@ public final class TypeAdapters {
+       out.value(value);
+     }
+   };
+-
+   public static final TypeAdapterFactory INTEGER_FACTORY
+       = newFactory(int.class, Integer.class, INTEGER);
+ 
++  public static final TypeAdapter<AtomicInteger> ATOMIC_INTEGER = new TypeAdapter<AtomicInteger>() {
++    @Override public AtomicInteger read(JsonReader in) throws IOException {
++      try {
++        return new AtomicInteger(in.nextInt());
++      } catch (NumberFormatException e) {
++        throw new JsonSyntaxException(e);
++      }
++    }
++    @Override public void write(JsonWriter out, AtomicInteger value) throws IOException {
++      out.value(value.get());
++    }
++  }.nullSafe();
++  public static final TypeAdapterFactory ATOMIC_INTEGER_FACTORY =
++      newFactory(AtomicInteger.class, TypeAdapters.ATOMIC_INTEGER);
++
++  public static final TypeAdapter<AtomicBoolean> ATOMIC_BOOLEAN = new TypeAdapter<AtomicBoolean>() {
++    @Override public AtomicBoolean read(JsonReader in) throws IOException {
++      return new AtomicBoolean(in.nextBoolean());
++    }
++    @Override public void write(JsonWriter out, AtomicBoolean value) throws IOException {
++      out.value(value.get());
++    }
++  }.nullSafe();
++  public static final TypeAdapterFactory ATOMIC_BOOLEAN_FACTORY =
++      newFactory(AtomicBoolean.class, TypeAdapters.ATOMIC_BOOLEAN);
++
++  public static final TypeAdapter<AtomicIntegerArray> ATOMIC_INTEGER_ARRAY = new TypeAdapter<AtomicIntegerArray>() {
++    @Override public AtomicIntegerArray read(JsonReader in) throws IOException {
++        List<Integer> list = new ArrayList<Integer>();
++        in.beginArray();
++        while (in.hasNext()) {
++          try {
++            int integer = in.nextInt();
++            list.add(integer);
++          } catch (NumberFormatException e) {
++            throw new JsonSyntaxException(e);
++          }
++        }
++        in.endArray();
++        int length = list.size();
++        AtomicIntegerArray array = new AtomicIntegerArray(length);
++        for (int i = 0; i < length; ++i) {
++          array.set(i, list.get(i));
++        }
++        return array;
++    }
++    @Override public void write(JsonWriter out, AtomicIntegerArray value) throws IOException {
++      out.beginArray();
++      for (int i = 0, length = value.length(); i < length; i++) {
++        out.value(value.get(i));
++      }
++      out.endArray();
++    }
++  }.nullSafe();
++  public static final TypeAdapterFactory ATOMIC_INTEGER_ARRAY_FACTORY =
++      newFactory(AtomicIntegerArray.class, TypeAdapters.ATOMIC_INTEGER_ARRAY);
++
+   public static final TypeAdapter<Number> LONG = new TypeAdapter<Number>() {
+     @Override
+     public Number read(JsonReader in) throws IOException {
+@@ -515,9 +573,21 @@ public final class TypeAdapters {
+ 
+   public static final TypeAdapterFactory UUID_FACTORY = newFactory(UUID.class, UUID);
+ 
++  public static final TypeAdapter<Currency> CURRENCY = new TypeAdapter<Currency>() {
++    @Override
++    public Currency read(JsonReader in) throws IOException {
++      return Currency.getInstance(in.nextString());
++    }
++    @Override
++    public void write(JsonWriter out, Currency value) throws IOException {
++      out.value(value.getCurrencyCode());
++    }
++  }.nullSafe();
++  public static final TypeAdapterFactory CURRENCY_FACTORY = newFactory(Currency.class, CURRENCY);
++
+   public static final TypeAdapterFactory TIMESTAMP_FACTORY = new TypeAdapterFactory() {
+     @SuppressWarnings("unchecked") // we use a runtime check to make sure the 'T's equal
+-    public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
++    @Override public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
+       if (typeToken.getRawType() != Timestamp.class) {
+         return null;
+       }
+@@ -735,10 +805,10 @@ public final class TypeAdapters {
+           constantToName.put(constant, name);
+         }
+       } catch (NoSuchFieldException e) {
+-        throw new AssertionError();
++        throw new AssertionError(e);
+       }
+     }
+-    public T read(JsonReader in) throws IOException {
++    @Override public T read(JsonReader in) throws IOException {
+       if (in.peek() == JsonToken.NULL) {
+         in.nextNull();
+         return null;
+@@ -746,14 +816,14 @@ public final class TypeAdapters {
+       return nameToConstant.get(in.nextString());
+     }
+ 
+-    public void write(JsonWriter out, T value) throws IOException {
++    @Override public void write(JsonWriter out, T value) throws IOException {
+       out.value(value == null ? null : constantToName.get(value));
+     }
+   }
+ 
+   public static final TypeAdapterFactory ENUM_FACTORY = new TypeAdapterFactory() {
+     @SuppressWarnings({"rawtypes", "unchecked"})
+-    public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
++    @Override public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
+       Class<? super T> rawType = typeToken.getRawType();
+       if (!Enum.class.isAssignableFrom(rawType) || rawType == Enum.class) {
+         return null;
+@@ -769,7 +839,7 @@ public final class TypeAdapters {
+       final TypeToken<TT> type, final TypeAdapter<TT> typeAdapter) {
+     return new TypeAdapterFactory() {
+       @SuppressWarnings("unchecked") // we use a runtime check to make sure the 'T's equal
+-      public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
++      @Override public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
+         return typeToken.equals(type) ? (TypeAdapter<T>) typeAdapter : null;
+       }
+     };
+@@ -779,7 +849,7 @@ public final class TypeAdapters {
+       final Class<TT> type, final TypeAdapter<TT> typeAdapter) {
+     return new TypeAdapterFactory() {
+       @SuppressWarnings("unchecked") // we use a runtime check to make sure the 'T's equal
+-      public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
++      @Override public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
+         return typeToken.getRawType() == type ? (TypeAdapter<T>) typeAdapter : null;
+       }
+       @Override public String toString() {
+@@ -792,7 +862,7 @@ public final class TypeAdapters {
+       final Class<TT> unboxed, final Class<TT> boxed, final TypeAdapter<? super TT> typeAdapter) {
+     return new TypeAdapterFactory() {
+       @SuppressWarnings("unchecked") // we use a runtime check to make sure the 'T's equal
+-      public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
++      @Override public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
+         Class<? super T> rawType = typeToken.getRawType();
+         return (rawType == unboxed || rawType == boxed) ? (TypeAdapter<T>) typeAdapter : null;
+       }
+@@ -807,7 +877,7 @@ public final class TypeAdapters {
+       final Class<? extends TT> sub, final TypeAdapter<? super TT> typeAdapter) {
+     return new TypeAdapterFactory() {
+       @SuppressWarnings("unchecked") // we use a runtime check to make sure the 'T's equal
+-      public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
++      @Override public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
+         Class<? super T> rawType = typeToken.getRawType();
+         return (rawType == base || rawType == sub) ? (TypeAdapter<T>) typeAdapter : null;
+       }
+@@ -818,12 +888,33 @@ public final class TypeAdapters {
+     };
+   }
+ 
+-  public static <TT> TypeAdapterFactory newTypeHierarchyFactory(
+-      final Class<TT> clazz, final TypeAdapter<TT> typeAdapter) {
++  /**
++   * Returns a factory for all subtypes of {@code typeAdapter}. We do a runtime check to confirm
++   * that the deserialized type matches the type requested.
++   */
++  public static <T1> TypeAdapterFactory newTypeHierarchyFactory(
++      final Class<T1> clazz, final TypeAdapter<T1> typeAdapter) {
+     return new TypeAdapterFactory() {
+       @SuppressWarnings("unchecked")
+-      public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
+-        return clazz.isAssignableFrom(typeToken.getRawType()) ? (TypeAdapter<T>) typeAdapter : null;
++      @Override public <T2> TypeAdapter<T2> create(Gson gson, TypeToken<T2> typeToken) {
++        final Class<? super T2> requestedType = typeToken.getRawType();
++        if (!clazz.isAssignableFrom(requestedType)) {
++          return null;
++        }
++        return (TypeAdapter<T2>) new TypeAdapter<T1>() {
++          @Override public void write(JsonWriter out, T1 value) throws IOException {
++            typeAdapter.write(out, value);
++          }
++
++          @Override public T1 read(JsonReader in) throws IOException {
++            T1 result = typeAdapter.read(in);
++            if (result != null && !requestedType.isInstance(result)) {
++              throw new JsonSyntaxException("Expected a " + requestedType.getName()
++                  + " but was " + result.getClass().getName());
++            }
++            return result;
++          }
++        };
+       }
+       @Override public String toString() {
+         return "Factory[typeHierarchy=" + clazz.getName() + ",adapter=" + typeAdapter + "]";
+diff --git a/gson/src/main/java/com/google/gson/internal/bind/util/ISO8601Utils.java b/gson/src/main/java/com/google/gson/internal/bind/util/ISO8601Utils.java
+new file mode 100644
+index 00000000..c931b090
+--- /dev/null
++++ b/gson/src/main/java/com/google/gson/internal/bind/util/ISO8601Utils.java
+@@ -0,0 +1,352 @@
++package com.google.gson.internal.bind.util;
++
++import java.text.ParseException;
++import java.text.ParsePosition;
++import java.util.*;
++
++/**
++ * Utilities methods for manipulating dates in iso8601 format. This is much much faster and GC friendly than using SimpleDateFormat so
++ * highly suitable if you (un)serialize lots of date objects.
++ * 
++ * Supported parse format: [yyyy-MM-dd|yyyyMMdd][T(hh:mm[:ss[.sss]]|hhmm[ss[.sss]])]?[Z|[+-]hh[:]mm]]
++ * 
++ * @see <a href="http://www.w3.org/TR/NOTE-datetime">this specification</a>
++ */
++//Date parsing code from Jackson databind ISO8601Utils.java
++// https://github.com/FasterXML/jackson-databind/blob/master/src/main/java/com/fasterxml/jackson/databind/util/ISO8601Utils.java
++public class ISO8601Utils
++{
++    /**
++     * ID to represent the 'UTC' string, default timezone since Jackson 2.7
++     * 
++     * @since 2.7
++     */
++    private static final String UTC_ID = "UTC";
++    /**
++     * The UTC timezone, prefetched to avoid more lookups.
++     * 
++     * @since 2.7
++     */
++    private static final TimeZone TIMEZONE_UTC = TimeZone.getTimeZone(UTC_ID);
++
++    /*
++    /**********************************************************
++    /* Formatting
++    /**********************************************************
++     */
++
++    /**
++     * Format a date into 'yyyy-MM-ddThh:mm:ssZ' (default timezone, no milliseconds precision)
++     * 
++     * @param date the date to format
++     * @return the date formatted as 'yyyy-MM-ddThh:mm:ssZ'
++     */
++    public static String format(Date date) {
++        return format(date, false, TIMEZONE_UTC);
++    }
++
++    /**
++     * Format a date into 'yyyy-MM-ddThh:mm:ss[.sss]Z' (GMT timezone)
++     * 
++     * @param date the date to format
++     * @param millis true to include millis precision otherwise false
++     * @return the date formatted as 'yyyy-MM-ddThh:mm:ss[.sss]Z'
++     */
++    public static String format(Date date, boolean millis) {
++        return format(date, millis, TIMEZONE_UTC);
++    }
++
++    /**
++     * Format date into yyyy-MM-ddThh:mm:ss[.sss][Z|[+-]hh:mm]
++     * 
++     * @param date the date to format
++     * @param millis true to include millis precision otherwise false
++     * @param tz timezone to use for the formatting (UTC will produce 'Z')
++     * @return the date formatted as yyyy-MM-ddThh:mm:ss[.sss][Z|[+-]hh:mm]
++     */
++    public static String format(Date date, boolean millis, TimeZone tz) {
++        Calendar calendar = new GregorianCalendar(tz, Locale.US);
++        calendar.setTime(date);
++
++        // estimate capacity of buffer as close as we can (yeah, that's pedantic ;)
++        int capacity = "yyyy-MM-ddThh:mm:ss".length();
++        capacity += millis ? ".sss".length() : 0;
++        capacity += tz.getRawOffset() == 0 ? "Z".length() : "+hh:mm".length();
++        StringBuilder formatted = new StringBuilder(capacity);
++
++        padInt(formatted, calendar.get(Calendar.YEAR), "yyyy".length());
++        formatted.append('-');
++        padInt(formatted, calendar.get(Calendar.MONTH) + 1, "MM".length());
++        formatted.append('-');
++        padInt(formatted, calendar.get(Calendar.DAY_OF_MONTH), "dd".length());
++        formatted.append('T');
++        padInt(formatted, calendar.get(Calendar.HOUR_OF_DAY), "hh".length());
++        formatted.append(':');
++        padInt(formatted, calendar.get(Calendar.MINUTE), "mm".length());
++        formatted.append(':');
++        padInt(formatted, calendar.get(Calendar.SECOND), "ss".length());
++        if (millis) {
++            formatted.append('.');
++            padInt(formatted, calendar.get(Calendar.MILLISECOND), "sss".length());
++        }
++
++        int offset = tz.getOffset(calendar.getTimeInMillis());
++        if (offset != 0) {
++            int hours = Math.abs((offset / (60 * 1000)) / 60);
++            int minutes = Math.abs((offset / (60 * 1000)) % 60);
++            formatted.append(offset < 0 ? '-' : '+');
++            padInt(formatted, hours, "hh".length());
++            formatted.append(':');
++            padInt(formatted, minutes, "mm".length());
++        } else {
++            formatted.append('Z');
++        }
++
++        return formatted.toString();
++    }
++
++    /*
++    /**********************************************************
++    /* Parsing
++    /**********************************************************
++     */
++
++    /**
++     * Parse a date from ISO-8601 formatted string. It expects a format
++     * [yyyy-MM-dd|yyyyMMdd][T(hh:mm[:ss[.sss]]|hhmm[ss[.sss]])]?[Z|[+-]hh[:mm]]]
++     * 
++     * @param date ISO string to parse in the appropriate format.
++     * @param pos The position to start parsing from, updated to where parsing stopped.
++     * @return the parsed date
++     * @throws ParseException if the date is not in the appropriate format
++     */
++    public static Date parse(String date, ParsePosition pos) throws ParseException {
++        Exception fail = null;
++        try {
++            int offset = pos.getIndex();
++
++            // extract year
++            int year = parseInt(date, offset, offset += 4);
++            if (checkOffset(date, offset, '-')) {
++                offset += 1;
++            }
++
++            // extract month
++            int month = parseInt(date, offset, offset += 2);
++            if (checkOffset(date, offset, '-')) {
++                offset += 1;
++            }
++
++            // extract day
++            int day = parseInt(date, offset, offset += 2);
++            // default time value
++            int hour = 0;
++            int minutes = 0;
++            int seconds = 0;
++            int milliseconds = 0; // always use 0 otherwise returned date will include millis of current time
++
++            // if the value has no time component (and no time zone), we are done
++            boolean hasT = checkOffset(date, offset, 'T');
++            
++            if (!hasT && (date.length() <= offset)) {
++                Calendar calendar = new GregorianCalendar(year, month - 1, day);
++
++                pos.setIndex(offset);
++                return calendar.getTime();
++            }
++
++            if (hasT) {
++
++                // extract hours, minutes, seconds and milliseconds
++                hour = parseInt(date, offset += 1, offset += 2);
++                if (checkOffset(date, offset, ':')) {
++                    offset += 1;
++                }
++
++                minutes = parseInt(date, offset, offset += 2);
++                if (checkOffset(date, offset, ':')) {
++                    offset += 1;
++                }
++                // second and milliseconds can be optional
++                if (date.length() > offset) {
++                    char c = date.charAt(offset);
++                    if (c != 'Z' && c != '+' && c != '-') {
++                        seconds = parseInt(date, offset, offset += 2);
++                        if (seconds > 59 && seconds < 63) seconds = 59; // truncate up to 3 leap seconds
++                        // milliseconds can be optional in the format
++                        if (checkOffset(date, offset, '.')) {
++                            offset += 1;
++                            int endOffset = indexOfNonDigit(date, offset + 1); // assume at least one digit
++                            int parseEndOffset = Math.min(endOffset, offset + 3); // parse up to 3 digits
++                            int fraction = parseInt(date, offset, parseEndOffset);
++                            // compensate for "missing" digits
++                            switch (parseEndOffset - offset) { // number of digits parsed
++                            case 2:
++                                milliseconds = fraction * 10;
++                                break;
++                            case 1:
++                                milliseconds = fraction * 100;
++                                break;
++                            default:
++                                milliseconds = fraction;
++                            }
++                            offset = endOffset;
++                        }
++                    }
++                }
++            }
++
++            // extract timezone
++            if (date.length() <= offset) {
++                throw new IllegalArgumentException("No time zone indicator");
++            }
++
++            TimeZone timezone = null;
++            char timezoneIndicator = date.charAt(offset);
++
++            if (timezoneIndicator == 'Z') {
++                timezone = TIMEZONE_UTC;
++                offset += 1;
++            } else if (timezoneIndicator == '+' || timezoneIndicator == '-') {
++                String timezoneOffset = date.substring(offset);
++
++                // When timezone has no minutes, we should append it, valid timezones are, for example: +00:00, +0000 and +00
++                timezoneOffset = timezoneOffset.length() >= 5 ? timezoneOffset : timezoneOffset + "00";
++
++                offset += timezoneOffset.length();
++                // 18-Jun-2015, tatu: Minor simplification, skip offset of "+0000"/"+00:00"
++                if ("+0000".equals(timezoneOffset) || "+00:00".equals(timezoneOffset)) {
++                    timezone = TIMEZONE_UTC;
++                } else {
++                    // 18-Jun-2015, tatu: Looks like offsets only work from GMT, not UTC...
++                    //    not sure why, but that's the way it looks. Further, Javadocs for
++                    //    `java.util.TimeZone` specifically instruct use of GMT as base for
++                    //    custom timezones... odd.
++                    String timezoneId = "GMT" + timezoneOffset;
++//                    String timezoneId = "UTC" + timezoneOffset;
++
++                    timezone = TimeZone.getTimeZone(timezoneId);
++
++                    String act = timezone.getID();
++                    if (!act.equals(timezoneId)) {
++                        /* 22-Jan-2015, tatu: Looks like canonical version has colons, but we may be given
++                         *    one without. If so, don't sweat.
++                         *   Yes, very inefficient. Hopefully not hit often.
++                         *   If it becomes a perf problem, add 'loose' comparison instead.
++                         */
++                        String cleaned = act.replace(":", "");
++                        if (!cleaned.equals(timezoneId)) {
++                            throw new IndexOutOfBoundsException("Mismatching time zone indicator: "+timezoneId+" given, resolves to "
++                                    +timezone.getID());
++                        }
++                    }
++                }
++            } else {
++                throw new IndexOutOfBoundsException("Invalid time zone indicator '" + timezoneIndicator+"'");
++            }
++
++            Calendar calendar = new GregorianCalendar(timezone);
++            calendar.setLenient(false);
++            calendar.set(Calendar.YEAR, year);
++            calendar.set(Calendar.MONTH, month - 1);
++            calendar.set(Calendar.DAY_OF_MONTH, day);
++            calendar.set(Calendar.HOUR_OF_DAY, hour);
++            calendar.set(Calendar.MINUTE, minutes);
++            calendar.set(Calendar.SECOND, seconds);
++            calendar.set(Calendar.MILLISECOND, milliseconds);
++
++            pos.setIndex(offset);
++            return calendar.getTime();
++            // If we get a ParseException it'll already have the right message/offset.
++            // Other exception types can convert here.
++        } catch (IndexOutOfBoundsException e) {
++            fail = e;
++        } catch (NumberFormatException e) {
++            fail = e;
++        } catch (IllegalArgumentException e) {
++            fail = e;
++        }
++        String input = (date == null) ? null : ('"' + date + "'");
++        String msg = fail.getMessage();
++        if (msg == null || msg.isEmpty()) {
++            msg = "("+fail.getClass().getName()+")";
++        }
++        ParseException ex = new ParseException("Failed to parse date [" + input + "]: " + msg, pos.getIndex());
++        ex.initCause(fail);
++        throw ex;
++    }
++
++    /**
++     * Check if the expected character exist at the given offset in the value.
++     * 
++     * @param value the string to check at the specified offset
++     * @param offset the offset to look for the expected character
++     * @param expected the expected character
++     * @return true if the expected character exist at the given offset
++     */
++    private static boolean checkOffset(String value, int offset, char expected) {
++        return (offset < value.length()) && (value.charAt(offset) == expected);
++    }
++
++    /**
++     * Parse an integer located between 2 given offsets in a string
++     * 
++     * @param value the string to parse
++     * @param beginIndex the start index for the integer in the string
++     * @param endIndex the end index for the integer in the string
++     * @return the int
++     * @throws NumberFormatException if the value is not a number
++     */
++    private static int parseInt(String value, int beginIndex, int endIndex) throws NumberFormatException {
++        if (beginIndex < 0 || endIndex > value.length() || beginIndex > endIndex) {
++            throw new NumberFormatException(value);
++        }
++        // use same logic as in Integer.parseInt() but less generic we're not supporting negative values
++        int i = beginIndex;
++        int result = 0;
++        int digit;
++        if (i < endIndex) {
++            digit = Character.digit(value.charAt(i++), 10);
++            if (digit < 0) {
++                throw new NumberFormatException("Invalid number: " + value.substring(beginIndex, endIndex));
++            }
++            result = -digit;
++        }
++        while (i < endIndex) {
++            digit = Character.digit(value.charAt(i++), 10);
++            if (digit < 0) {
++                throw new NumberFormatException("Invalid number: " + value.substring(beginIndex, endIndex));
++            }
++            result *= 10;
++            result -= digit;
++        }
++        return -result;
++    }
++
++    /**
++     * Zero pad a number to a specified length
++     * 
++     * @param buffer buffer to use for padding
++     * @param value the integer value to pad if necessary.
++     * @param length the length of the string we should zero pad
++     */
++    private static void padInt(StringBuilder buffer, int value, int length) {
++        String strValue = Integer.toString(value);
++        for (int i = length - strValue.length(); i > 0; i--) {
++            buffer.append('0');
++        }
++        buffer.append(strValue);
++    }
++
++    /**
++     * Returns the index of the first character in the string that is not a digit, starting at offset.
++     */
++    private static int indexOfNonDigit(String string, int offset) {
++        for (int i = offset; i < string.length(); i++) {
++            char c = string.charAt(i);
++            if (c < '0' || c > '9') return i;
++        }
++        return string.length();
++    }
++
++}
+diff --git a/gson/src/main/java/com/google/gson/reflect/TypeToken.java b/gson/src/main/java/com/google/gson/reflect/TypeToken.java
+index e16e8e6d..3fb8af2b 100644
+--- a/gson/src/main/java/com/google/gson/reflect/TypeToken.java
++++ b/gson/src/main/java/com/google/gson/reflect/TypeToken.java
+@@ -302,4 +302,19 @@ public class TypeToken<T> {
+   public static <T> TypeToken<T> get(Class<T> type) {
+     return new TypeToken<T>(type);
+   }
++
++  /**
++   * Gets type literal for the parameterized type represented by applying {@code typeArguments} to
++   * {@code rawType}.
++   */
++  public static TypeToken<?> getParameterized(Type rawType, Type... typeArguments) {
++    return new TypeToken<Object>($Gson$Types.newParameterizedTypeWithOwner(null, rawType, typeArguments));
++  }
++
++  /**
++   * Gets type literal for the array type whose elements are all instances of {@code componentType}.
++   */
++  public static TypeToken<?> getArray(Type componentType) {
++    return new TypeToken<Object>($Gson$Types.arrayOf(componentType));
++  }
+ }
+diff --git a/gson/src/main/java/com/google/gson/stream/JsonReader.java b/gson/src/main/java/com/google/gson/stream/JsonReader.java
+index 388f30b0..9c55c436 100644
+--- a/gson/src/main/java/com/google/gson/stream/JsonReader.java
++++ b/gson/src/main/java/com/google/gson/stream/JsonReader.java
+@@ -24,7 +24,7 @@ import java.io.IOException;
+ import java.io.Reader;
+ 
+ /**
+- * Reads a JSON (<a href="http://www.ietf.org/rfc/rfc4627.txt">RFC 4627</a>)
++ * Reads a JSON (<a href="http://www.ietf.org/rfc/rfc7159.txt">RFC 7159</a>)
+  * encoded value as a stream of tokens. This stream includes both literal
+  * values (strings, numbers, booleans, and nulls) as well as the begin and
+  * end delimiters of objects and arrays. The tokens are traversed in
+@@ -242,7 +242,7 @@ public class JsonReader implements Closeable {
+   private int lineNumber = 0;
+   private int lineStart = 0;
+ 
+-  private int peeked = PEEKED_NONE;
++  int peeked = PEEKED_NONE;
+ 
+   /**
+    * A peeked value that was composed entirely of digits with an optional
+@@ -294,7 +294,7 @@ public class JsonReader implements Closeable {
+   }
+ 
+   /**
+-   * Configure this parser to be  be liberal in what it accepts. By default,
++   * Configure this parser to be liberal in what it accepts. By default,
+    * this parser is strict and only accepts JSON as specified by <a
+    * href="http://www.ietf.org/rfc/rfc4627.txt">RFC 4627</a>. Setting the
+    * parser to lenient causes it to ignore the following syntax errors:
+@@ -347,8 +347,7 @@ public class JsonReader implements Closeable {
+       pathIndices[stackSize - 1] = 0;
+       peeked = PEEKED_NONE;
+     } else {
+-      throw new IllegalStateException("Expected BEGIN_ARRAY but was " + peek()
+-          + " at line " + getLineNumber() + " column " + getColumnNumber() + " path " + getPath());
++      throw new IllegalStateException("Expected BEGIN_ARRAY but was " + peek() + locationString());
+     }
+   }
+ 
+@@ -366,8 +365,7 @@ public class JsonReader implements Closeable {
+       pathIndices[stackSize - 1]++;
+       peeked = PEEKED_NONE;
+     } else {
+-      throw new IllegalStateException("Expected END_ARRAY but was " + peek()
+-          + " at line " + getLineNumber() + " column " + getColumnNumber() + " path " + getPath());
++      throw new IllegalStateException("Expected END_ARRAY but was " + peek() + locationString());
+     }
+   }
+ 
+@@ -384,8 +382,7 @@ public class JsonReader implements Closeable {
+       push(JsonScope.EMPTY_OBJECT);
+       peeked = PEEKED_NONE;
+     } else {
+-      throw new IllegalStateException("Expected BEGIN_OBJECT but was " + peek()
+-          + " at line " + getLineNumber() + " column " + getColumnNumber() + " path " + getPath());
++      throw new IllegalStateException("Expected BEGIN_OBJECT but was " + peek() + locationString());
+     }
+   }
+ 
+@@ -404,8 +401,7 @@ public class JsonReader implements Closeable {
+       pathIndices[stackSize - 1]++;
+       peeked = PEEKED_NONE;
+     } else {
+-      throw new IllegalStateException("Expected END_OBJECT but was " + peek()
+-          + " at line " + getLineNumber() + " column " + getColumnNumber() + " path " + getPath());
++      throw new IllegalStateException("Expected END_OBJECT but was " + peek() + locationString());
+     }
+   }
+ 
+@@ -462,7 +458,7 @@ public class JsonReader implements Closeable {
+     }
+   }
+ 
+-  private int doPeek() throws IOException {
++  int doPeek() throws IOException {
+     int peekStack = stack[stackSize - 1];
+     if (peekStack == JsonScope.EMPTY_ARRAY) {
+       stack[stackSize - 1] = JsonScope.NONEMPTY_ARRAY;
+@@ -571,9 +567,6 @@ public class JsonReader implements Closeable {
+       checkLenient();
+       return peeked = PEEKED_SINGLE_QUOTED;
+     case '"':
+-      if (stackSize == 1) {
+-        checkLenient();
+-      }
+       return peeked = PEEKED_DOUBLE_QUOTED;
+     case '[':
+       return peeked = PEEKED_BEGIN_ARRAY;
+@@ -583,10 +576,6 @@ public class JsonReader implements Closeable {
+       pos--; // Don't consume the first character in a literal value.
+     }
+ 
+-    if (stackSize == 1) {
+-      checkLenient(); // Top-level value isn't an array or an object.
+-    }
+-
+     int result = peekKeyword();
+     if (result != PEEKED_NONE) {
+       return result;
+@@ -797,8 +786,7 @@ public class JsonReader implements Closeable {
+     } else if (p == PEEKED_DOUBLE_QUOTED_NAME) {
+       result = nextQuotedValue('"');
+     } else {
+-      throw new IllegalStateException("Expected a name but was " + peek()
+-          + " at line " + getLineNumber() + " column " + getColumnNumber() + " path " + getPath());
++      throw new IllegalStateException("Expected a name but was " + peek() + locationString());
+     }
+     peeked = PEEKED_NONE;
+     pathNames[stackSize - 1] = result;
+@@ -834,8 +822,7 @@ public class JsonReader implements Closeable {
+       result = new String(buffer, pos, peekedNumberLength);
+       pos += peekedNumberLength;
+     } else {
+-      throw new IllegalStateException("Expected a string but was " + peek()
+-          + " at line " + getLineNumber() + " column " + getColumnNumber() + " path " + getPath());
++      throw new IllegalStateException("Expected a string but was " + peek() + locationString());
+     }
+     peeked = PEEKED_NONE;
+     pathIndices[stackSize - 1]++;
+@@ -863,8 +850,7 @@ public class JsonReader implements Closeable {
+       pathIndices[stackSize - 1]++;
+       return false;
+     }
+-    throw new IllegalStateException("Expected a boolean but was " + peek()
+-        + " at line " + getLineNumber() + " column " + getColumnNumber() + " path " + getPath());
++    throw new IllegalStateException("Expected a boolean but was " + peek() + locationString());
+   }
+ 
+   /**
+@@ -883,8 +869,7 @@ public class JsonReader implements Closeable {
+       peeked = PEEKED_NONE;
+       pathIndices[stackSize - 1]++;
+     } else {
+-      throw new IllegalStateException("Expected null but was " + peek()
+-          + " at line " + getLineNumber() + " column " + getColumnNumber() + " path " + getPath());
++      throw new IllegalStateException("Expected null but was " + peek() + locationString());
+     }
+   }
+ 
+@@ -917,15 +902,14 @@ public class JsonReader implements Closeable {
+     } else if (p == PEEKED_UNQUOTED) {
+       peekedString = nextUnquotedValue();
+     } else if (p != PEEKED_BUFFERED) {
+-      throw new IllegalStateException("Expected a double but was " + peek()
+-          + " at line " + getLineNumber() + " column " + getColumnNumber() + " path " + getPath());
++      throw new IllegalStateException("Expected a double but was " + peek() + locationString());
+     }
+ 
+     peeked = PEEKED_BUFFERED;
+     double result = Double.parseDouble(peekedString); // don't catch this NumberFormatException.
+     if (!lenient && (Double.isNaN(result) || Double.isInfinite(result))) {
+-      throw new MalformedJsonException("JSON forbids NaN and infinities: " + result
+-          + " at line " + getLineNumber() + " column " + getColumnNumber() + " path " + getPath());
++      throw new MalformedJsonException(
++          "JSON forbids NaN and infinities: " + result + locationString());
+     }
+     peekedString = null;
+     peeked = PEEKED_NONE;
+@@ -958,8 +942,12 @@ public class JsonReader implements Closeable {
+     if (p == PEEKED_NUMBER) {
+       peekedString = new String(buffer, pos, peekedNumberLength);
+       pos += peekedNumberLength;
+-    } else if (p == PEEKED_SINGLE_QUOTED || p == PEEKED_DOUBLE_QUOTED) {
+-      peekedString = nextQuotedValue(p == PEEKED_SINGLE_QUOTED ? '\'' : '"');
++    } else if (p == PEEKED_SINGLE_QUOTED || p == PEEKED_DOUBLE_QUOTED || p == PEEKED_UNQUOTED) {
++      if (p == PEEKED_UNQUOTED) {
++        peekedString = nextUnquotedValue();
++      } else {
++        peekedString = nextQuotedValue(p == PEEKED_SINGLE_QUOTED ? '\'' : '"');
++      }
+       try {
+         long result = Long.parseLong(peekedString);
+         peeked = PEEKED_NONE;
+@@ -969,16 +957,14 @@ public class JsonReader implements Closeable {
+         // Fall back to parse as a double below.
+       }
+     } else {
+-      throw new IllegalStateException("Expected a long but was " + peek()
+-          + " at line " + getLineNumber() + " column " + getColumnNumber() + " path " + getPath());
++      throw new IllegalStateException("Expected a long but was " + peek() + locationString());
+     }
+ 
+     peeked = PEEKED_BUFFERED;
+     double asDouble = Double.parseDouble(peekedString); // don't catch this NumberFormatException.
+     long result = (long) asDouble;
+     if (result != asDouble) { // Make sure no precision was lost casting to 'long'.
+-      throw new NumberFormatException("Expected a long but was " + peekedString
+-          + " at line " + getLineNumber() + " column " + getColumnNumber() + " path " + getPath());
++      throw new NumberFormatException("Expected a long but was " + peekedString + locationString());
+     }
+     peekedString = null;
+     peeked = PEEKED_NONE;
+@@ -1175,8 +1161,7 @@ public class JsonReader implements Closeable {
+     if (p == PEEKED_LONG) {
+       result = (int) peekedLong;
+       if (peekedLong != result) { // Make sure no precision was lost casting to 'int'.
+-        throw new NumberFormatException("Expected an int but was " + peekedLong
+-            + " at line " + getLineNumber() + " column " + getColumnNumber() + " path " + getPath());
++        throw new NumberFormatException("Expected an int but was " + peekedLong + locationString());
+       }
+       peeked = PEEKED_NONE;
+       pathIndices[stackSize - 1]++;
+@@ -1186,8 +1171,12 @@ public class JsonReader implements Closeable {
+     if (p == PEEKED_NUMBER) {
+       peekedString = new String(buffer, pos, peekedNumberLength);
+       pos += peekedNumberLength;
+-    } else if (p == PEEKED_SINGLE_QUOTED || p == PEEKED_DOUBLE_QUOTED) {
+-      peekedString = nextQuotedValue(p == PEEKED_SINGLE_QUOTED ? '\'' : '"');
++    } else if (p == PEEKED_SINGLE_QUOTED || p == PEEKED_DOUBLE_QUOTED || p == PEEKED_UNQUOTED) {
++      if (p == PEEKED_UNQUOTED) {
++        peekedString = nextUnquotedValue();
++      } else {
++        peekedString = nextQuotedValue(p == PEEKED_SINGLE_QUOTED ? '\'' : '"');
++      }
+       try {
+         result = Integer.parseInt(peekedString);
+         peeked = PEEKED_NONE;
+@@ -1197,16 +1186,14 @@ public class JsonReader implements Closeable {
+         // Fall back to parse as a double below.
+       }
+     } else {
+-      throw new IllegalStateException("Expected an int but was " + peek()
+-          + " at line " + getLineNumber() + " column " + getColumnNumber() + " path " + getPath());
++      throw new IllegalStateException("Expected an int but was " + peek() + locationString());
+     }
+ 
+     peeked = PEEKED_BUFFERED;
+     double asDouble = Double.parseDouble(peekedString); // don't catch this NumberFormatException.
+     result = (int) asDouble;
+     if (result != asDouble) { // Make sure no precision was lost casting to 'int'.
+-      throw new NumberFormatException("Expected an int but was " + peekedString
+-          + " at line " + getLineNumber() + " column " + getColumnNumber() + " path " + getPath());
++      throw new NumberFormatException("Expected an int but was " + peekedString + locationString());
+     }
+     peekedString = null;
+     peeked = PEEKED_NONE;
+@@ -1314,14 +1301,6 @@ public class JsonReader implements Closeable {
+     return false;
+   }
+ 
+-  private int getLineNumber() {
+-    return lineNumber + 1;
+-  }
+-
+-  private int getColumnNumber() {
+-    return pos - lineStart + 1;
+-  }
+-
+   /**
+    * Returns the next character in the stream that is neither whitespace nor a
+    * part of a comment. When this returns, the returned character is always at
+@@ -1411,8 +1390,7 @@ public class JsonReader implements Closeable {
+       }
+     }
+     if (throwOnEof) {
+-      throw new EOFException("End of input"
+-          + " at line " + getLineNumber() + " column " + getColumnNumber());
++      throw new EOFException("End of input" + locationString());
+     } else {
+       return -1;
+     }
+@@ -1464,8 +1442,13 @@ public class JsonReader implements Closeable {
+   }
+ 
+   @Override public String toString() {
+-    return getClass().getSimpleName()
+-        + " at line " + getLineNumber() + " column " + getColumnNumber();
++    return getClass().getSimpleName() + locationString();
++  }
++
++  private String locationString() {
++    int line = lineNumber + 1;
++    int column = pos - lineStart + 1;
++    return " at line " + line + " column " + column + " path " + getPath();
+   }
+ 
+   /**
+@@ -1560,8 +1543,11 @@ public class JsonReader implements Closeable {
+     case '\'':
+     case '"':
+     case '\\':
++    case '/':	
++    	return escaped;
+     default:
+-      return escaped;
++    	// throw error when none of the above cases are matched
++    	throw syntaxError("Invalid escape sequence");
+     }
+   }
+ 
+@@ -1570,8 +1556,7 @@ public class JsonReader implements Closeable {
+    * with this reader's content.
+    */
+   private IOException syntaxError(String message) throws IOException {
+-    throw new MalformedJsonException(message
+-        + " at line " + getLineNumber() + " column " + getColumnNumber() + " path " + getPath());
++    throw new MalformedJsonException(message + locationString());
+   }
+ 
+   /**
+@@ -1614,9 +1599,8 @@ public class JsonReader implements Closeable {
+         } else if (p == PEEKED_UNQUOTED_NAME) {
+           reader.peeked = PEEKED_UNQUOTED;
+         } else {
+-          throw new IllegalStateException("Expected a name but was " + reader.peek() + " "
+-              + " at line " + reader.getLineNumber() + " column " + reader.getColumnNumber()
+-              + " path " + reader.getPath());
++          throw new IllegalStateException(
++              "Expected a name but was " + reader.peek() + reader.locationString());
+         }
+       }
+     };
+diff --git a/gson/src/main/java/com/google/gson/stream/JsonWriter.java b/gson/src/main/java/com/google/gson/stream/JsonWriter.java
+index 8d3bdb34..e2fc1961 100644
+--- a/gson/src/main/java/com/google/gson/stream/JsonWriter.java
++++ b/gson/src/main/java/com/google/gson/stream/JsonWriter.java
+@@ -30,7 +30,7 @@ import static com.google.gson.stream.JsonScope.NONEMPTY_DOCUMENT;
+ import static com.google.gson.stream.JsonScope.NONEMPTY_OBJECT;
+ 
+ /**
+- * Writes a JSON (<a href="http://www.ietf.org/rfc/rfc4627.txt">RFC 4627</a>)
++ * Writes a JSON (<a href="http://www.ietf.org/rfc/rfc7159.txt">RFC 7159</a>)
+  * encoded value to a stream, one token at a time. The stream includes both
+  * literal values (strings, numbers, booleans and nulls) as well as the begin
+  * and end delimiters of objects and arrays.
+@@ -130,7 +130,7 @@ import static com.google.gson.stream.JsonScope.NONEMPTY_OBJECT;
+ public class JsonWriter implements Closeable, Flushable {
+ 
+   /*
+-   * From RFC 4627, "All Unicode characters may be placed within the
++   * From RFC 7159, "All Unicode characters may be placed within the
+    * quotation marks except for the characters that must be escaped:
+    * quotation mark, reverse solidus, and the control characters
+    * (U+0000 through U+001F)."
+@@ -222,7 +222,7 @@ public class JsonWriter implements Closeable, Flushable {
+   /**
+    * Configure this writer to relax its syntax rules. By default, this writer
+    * only emits well-formed JSON as specified by <a
+-   * href="http://www.ietf.org/rfc/rfc4627.txt">RFC 4627</a>. Setting the writer
++   * href="http://www.ietf.org/rfc/rfc7159.txt">RFC 7159</a>. Setting the writer
+    * to lenient permits the following:
+    * <ul>
+    *   <li>Top-level values of any type. With strict writing, the top-level
+@@ -322,7 +322,7 @@ public class JsonWriter implements Closeable, Flushable {
+    * bracket.
+    */
+   private JsonWriter open(int empty, String openBracket) throws IOException {
+-    beforeValue(true);
++    beforeValue();
+     push(empty);
+     out.write(openBracket);
+     return this;
+@@ -415,7 +415,7 @@ public class JsonWriter implements Closeable, Flushable {
+       return nullValue();
+     }
+     writeDeferredName();
+-    beforeValue(false);
++    beforeValue();
+     string(value);
+     return this;
+   }
+@@ -432,7 +432,7 @@ public class JsonWriter implements Closeable, Flushable {
+       return nullValue();
+     }
+     writeDeferredName();
+-    beforeValue(false);
++    beforeValue();
+     out.append(value);
+     return this;
+   }
+@@ -451,7 +451,7 @@ public class JsonWriter implements Closeable, Flushable {
+         return this; // skip the name and the value
+       }
+     }
+-    beforeValue(false);
++    beforeValue();
+     out.write("null");
+     return this;
+   }
+@@ -463,7 +463,22 @@ public class JsonWriter implements Closeable, Flushable {
+    */
+   public JsonWriter value(boolean value) throws IOException {
+     writeDeferredName();
+-    beforeValue(false);
++    beforeValue();
++    out.write(value ? "true" : "false");
++    return this;
++  }
++
++  /**
++   * Encodes {@code value}.
++   *
++   * @return this writer.
++   */
++  public JsonWriter value(Boolean value) throws IOException {
++    if (value == null) {
++      return nullValue();
++    }
++    writeDeferredName();
++    beforeValue();
+     out.write(value ? "true" : "false");
+     return this;
+   }
+@@ -480,7 +495,7 @@ public class JsonWriter implements Closeable, Flushable {
+       throw new IllegalArgumentException("Numeric values must be finite, but was " + value);
+     }
+     writeDeferredName();
+-    beforeValue(false);
++    beforeValue();
+     out.append(Double.toString(value));
+     return this;
+   }
+@@ -492,7 +507,7 @@ public class JsonWriter implements Closeable, Flushable {
+    */
+   public JsonWriter value(long value) throws IOException {
+     writeDeferredName();
+-    beforeValue(false);
++    beforeValue();
+     out.write(Long.toString(value));
+     return this;
+   }
+@@ -515,7 +530,7 @@ public class JsonWriter implements Closeable, Flushable {
+         && (string.equals("-Infinity") || string.equals("Infinity") || string.equals("NaN"))) {
+       throw new IllegalArgumentException("Numeric values must be finite, but was " + value);
+     }
+-    beforeValue(false);
++    beforeValue();
+     out.append(string);
+     return this;
+   }
+@@ -608,12 +623,9 @@ public class JsonWriter implements Closeable, Flushable {
+    * Inserts any necessary separators and whitespace before a literal value,
+    * inline array, or inline object. Also adjusts the stack to expect either a
+    * closing bracket or another element.
+-   *
+-   * @param root true if the value is a new array or object, the two values
+-   *     permitted as top-level elements.
+    */
+   @SuppressWarnings("fallthrough")
+-  private void beforeValue(boolean root) throws IOException {
++  private void beforeValue() throws IOException {
+     switch (peek()) {
+     case NONEMPTY_DOCUMENT:
+       if (!lenient) {
+@@ -622,10 +634,6 @@ public class JsonWriter implements Closeable, Flushable {
+       }
+       // fall-through
+     case EMPTY_DOCUMENT: // first in document
+-      if (!lenient && !root) {
+-        throw new IllegalStateException(
+-            "JSON must start with an array or an object.");
+-      }
+       replaceTop(NONEMPTY_DOCUMENT);
+       break;
+ 
+diff --git a/gson/pom.xml b/gson/pom.xml
+index 0000000..0000001 100644
+--- a/gson/pom.xml
++++ b/gson/pom.xml
+@@ -113,8 +113,8 @@
+         <artifactId>maven-compiler-plugin</artifactId>
+         <version>3.3</version>
+         <configuration>
+-          <source>1.5</source>
+-          <target>1.5</target>
++          <source>1.6</source>
++          <target>1.6</target>
+         </configuration>
+       </plugin>
+       <plugin>

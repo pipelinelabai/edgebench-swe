@@ -1,0 +1,36 @@
+{
+  "name": "@turf/inside",
+  "version": "3.10.5",
+  "description": "turf inside module",
+  "main": "index.js",
+  "scripts": {
+    "test": "tape test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/Turfjs/turf.git"
+  },
+  "keywords": [
+    "geojson",
+    "polygon",
+    "point",
+    "inside",
+    "bin",
+    "gis"
+  ],
+  "author": "Turf Authors",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Turfjs/turf/issues"
+  },
+  "homepage": "https://github.com/Turfjs/turf",
+  "dependencies": {
+    "@turf/invariant": "^3.10.0"
+  },
+  "devDependencies": {
+    "benchmark": "^1.0.0",
+    "tape": "^3.5.0",
+    "@turf/helpers": "^3.10.5"
+  },
+  "types": "index.d.ts"
+}

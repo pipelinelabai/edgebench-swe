@@ -1,0 +1,19 @@
+version = "1"
+
+[metadata]
+name        = "libzmq-4.0.0-roadmap"
+description = "Upgrade a distributed messaging library across a major-version boundary: introduce a public base-85 codec, a shutdown/finalize split for the context lifecycle, a zero-copy send entry point, a new raw-TCP socket type, a conflate socket option, connect-before-bind for the in-process transport, and two renamed socket options with an inheritable IPv6 context default."
+category    = "software_engineering"
+difficulty  = "hard"
+
+[verifier]
+timeout_sec = 1800
+
+[agent]
+timeout_sec = 7200
+
+[environment]
+build_timeout_sec = 900
+cpus       = 2
+memory_mb  = 8192
+storage_mb = 10240

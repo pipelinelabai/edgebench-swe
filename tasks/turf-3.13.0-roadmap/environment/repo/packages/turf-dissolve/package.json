@@ -1,0 +1,39 @@
+{
+  "name": "@turf/dissolve",
+  "version": "3.11.6",
+  "description": "Dissolves polygons based on an attribute",
+  "main": "index.js",
+  "scripts": {
+    "test": "tape test.js"
+  },
+  "keywords": [
+    "turf",
+    "dissolve",
+    "gis",
+    "geojson",
+    "polygon"
+  ],
+  "author": "Turf Authors",
+  "license": "MIT",
+  "dependencies": {
+    "@turf/bbox": "^3.10.5",
+    "@turf/helpers": "^3.10.5",
+    "@turf/union": "^3.11.6",
+    "geojson-utils": "^1.1.0",
+    "get-closest": "0.0.3",
+    "rbush": "^2.0.1",
+    "turf-overlaps": "^1.0.3"
+  },
+  "devDependencies": {
+    "tape": "^4.6.3"
+  },
+  "types": "index.d.ts",
+  "homepage": "https://github.com/Turfjs/turf",
+  "bugs": {
+    "url": "https://github.com/Turfjs/turf/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/Turfjs/turf.git"
+  }
+}

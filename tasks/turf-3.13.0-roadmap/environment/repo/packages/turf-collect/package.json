@@ -1,0 +1,41 @@
+{
+  "name": "@turf/collect",
+  "version": "3.10.5",
+  "description": "turf aggregate module",
+  "main": "index.js",
+  "scripts": {
+    "test": "tape test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/Turfjs/turf.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Turfjs/turf/issues"
+  },
+  "keywords": [
+    "aggregate",
+    "turf",
+    "geojson",
+    "points",
+    "polygons",
+    "stats"
+  ],
+  "homepage": "https://github.com/Turfjs/turf",
+  "author": "Turf Authors",
+  "contributors": [
+    "Rowan Winsemius"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "rbush": "^2.0.1",
+    "@turf/bbox": "^3.10.5",
+    "@turf/inside": "^3.10.5"
+  },
+  "devDependencies": {
+    "benchmark": "^1.0.0",
+    "tape": "^3.6.1",
+    "@turf/helpers": "^3.10.5"
+  },
+  "types": "index.d.ts"
+}
