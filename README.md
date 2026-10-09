@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/figures/pipelinelab-logo.png" alt="Pipeline Lab" width="220" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/figures/pipelinelab-logo-dark.png">
+    <img src="docs/figures/pipelinelab-logo.png" alt="Pipeline Lab" width="220" />
+  </picture>
 </p>
 
 # EdgeBench SWE
